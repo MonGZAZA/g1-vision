@@ -1,0 +1,2 @@
+silero_vad.onnx: Silero VAD v6.2 (https://github.com/snakers4/silero-vad, tag v6.2, src/silero_vad/data), MIT licence.
+Downloaded 2026-11-13 for exp05 speech recognition (deploy/listen.py).

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>exp05 Monitor</title>
+<style>
+  :root { --bg:#0b1020; --ink:#f3f4f6; --mute:#9ca3af; --cur:#fde68a; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.4 "Noto Sans Thai","Loma",system-ui,sans-serif;
+         min-height:100vh; display:flex; flex-direction:column; }
+  header { display:flex; gap:10px; align-items:center; padding:10px 16px; flex-wrap:wrap; }
+  header b { font-size:15px; }
+  .pill { padding:2px 10px; border-radius:99px; font-size:13px; background:#374151; }
+  .pill.ok { background:var(--ok); } .pill.warn { background:var(--warn); } .pill.bad { background:var(--bad); }
+  main { flex:1; display:flex; flex-direction:column; justify-content:center; padding:16px; }
+  #cap { font-size:clamp(28px, 6vw, 64px); line-height:1.3; text-align:center; min-height:2.6em; }
+  #cap .done { color:#6b7280; } #cap .cur { color:var(--cur); } #cap .next { color:#374151; }
+  #act { text-align:center; color:var(--mute); margin-top:14px; }
+  #hist { padding:0 16px 16px; color:var(--mute); font-size:14px; max-height:30vh; overflow:auto; }
+</style>
+</head>
+<body>
+<header><b>exp05 · greeter monitor</b> <span class="pill" id="mode">…</span> <span class="pill" id="shop">…</span>
+  <span class="pill" id="lang">…</span> <span style="flex:1"></span><span id="clock" style="color:var(--mute)"></span></header>
+<main><div id="cap">—</div><div id="act"></div></main>
+<div id="hist"></div>
+<script>
+// Read-only: polls /api/live (10 Hz). Open from any machine on the network: http://<laptop>:8100/monitor
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let lastFull = null; const hist = [];
+async function tick() {
+  try {
+    const s = await (await fetch('/api/live')).json();
+    $('mode').textContent = 'arms ' + s.mode; $('mode').className = 'pill ' + (s.mode === 'released' ? '' : 'warn');
+    $('shop').textContent = 'shop ' + (s.shop || '—'); $('lang').textContent = s.settings.lang.toUpperCase() + ' · ' + s.settings.audio;
+    const c = s.caption;
+    if (!c) $('cap').innerHTML = '<span class="next">—</span>';
+    else {
+      const k = c.full.indexOf(c.text);
+      $('cap').innerHTML = k < 0 ? `<span class="cur">${esc(c.text)}</span>` : `<span class="done">${esc(c.full.slice(0, k))}</span><span class="cur">${esc(c.text)}</span><span class="next">${esc(c.full.slice(k + c.text.length))}</span>`;
+      if (c.full !== lastFull) { lastFull = c.full; hist.unshift(new Date().toLocaleTimeString() + '  ' + c.full); hist.length = Math.min(hist.length, 20);
+        $('hist').innerHTML = hist.map(h => `<div>${esc(h)}</div>`).join(''); }
+    }
+    const a = s.action;
+    $('act').textContent = a && a.name ? `${a.name}${a.booth ? ' → ' + a.booth : ''} · ${a.phase || ''}` : '';
+    $('clock').textContent = new Date(s.time * 1000).toLocaleTimeString();
+  } catch (e) { $('mode').textContent = 'server offline'; $('mode').className = 'pill bad'; }
+}
+setInterval(tick, 100); tick();
+</script>
+</body>
+</html>
