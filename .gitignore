@@ -1,0 +1,66 @@
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Heavy Model Weights (>100MB exceeds GitHub limits; download via setup scripts)
+ai/models/
+ai/models/hf/
+ai/models/hf/hub/
+vision/models/*.onnx
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+
+# Keep small task and detector models
+!vision/models/face_detection_yunet_2023mar.onnx
+!vision/models/face_landmarker.task
+!vision/models/pose_landmarker_lite.task
+!vision/models/pose_landmarker_full.task
+!vision/models/pose_landmarker_heavy.task
+
+# Cache & Temporary Files
+.cache/
+cache/
+logs/
+*.log
+
+# Video / Audio recordings
+videos/
+clips/*.mp4
+clips/*.avi
+clips/*.wav
+
+# IDE & OS Artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

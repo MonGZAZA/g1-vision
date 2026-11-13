@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>exp05 G1 Greeter</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --ink:#1d2330; --mute:#6b7280; --line:#dfe3ea; --ok:#15803d; --warn:#b45309;
+          --bad:#b91c1c; --acc:#2563eb; --sel:#f59e0b; }
+  * { box-sizing: border-box; }
+  html, body { height:100%; }
+  body { margin:0; font:14px/1.45 system-ui, "Noto Sans Thai", "Loma", sans-serif; background:var(--bg); color:var(--ink);
+         display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:10px; padding:8px 16px; background:#1d2330; color:#fff; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0 8px 0 0; font-weight:600; }
+  .tab { background:transparent; color:#cbd5e1; border:none; padding:6px 12px; border-radius:6px; }
+  .tab.on { background:#374151; color:#fff; }
+  .pill { padding:2px 10px; border-radius:99px; font-size:12px; background:#374151; color:#fff; }
+  .pill.ok, .pill.warn, .pill.bad { color:#fff; } .pill.ok { background:var(--ok); } .pill.warn { background:var(--warn); } .pill.bad { background:var(--bad); }
+  .page { display:none; flex:1; min-height:0; } .page.on { display:flex; }
+  #scripts.on { display:grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap:12px; padding:12px 16px;
+                align-content:start; overflow:auto; }
+  .sgrid { display:grid; grid-template-columns: 110px 1fr 1fr; gap:6px 10px; align-items:start; }
+  .sgrid textarea { min-height:2.4em; }
+  #operate { display:none; } #operate.on { display:grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+             gap:12px; padding:12px 16px; align-content:start; overflow:auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .card h2 { font-size:12px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); }
+  button { font:inherit; padding:6px 11px; border-radius:7px; border:1px solid var(--line); background:#fff; color:var(--ink); cursor:pointer; }
+  button:hover { border-color:var(--acc); }
+  button.primary { background:var(--acc); color:#fff; border-color:var(--acc); }
+  button.estop { background:var(--bad); color:#fff; border-color:var(--bad); font-weight:700; }
+  button.on { background:#dbeafe; border-color:var(--acc); }
+  button:disabled { opacity:.45; cursor:default; }
+  .seg { display:inline-flex; border-radius:7px; overflow:hidden; border:1px solid #4b5563; }
+  .seg button { border:none; border-radius:0; background:#374151; color:#cbd5e1; padding:4px 10px; }
+  .seg button.on { background:var(--acc); color:#fff; }
+  header select { font:inherit; font-size:12px; padding:3px 6px; border-radius:6px; }
+  .big { font-size:16px; padding:10px 14px; }
+  #caption { font-size:26px; line-height:1.35; min-height:2.8em; padding:10px 12px; background:#111827; color:#f9fafb;
+             border-radius:8px; font-family:"Noto Sans Thai","Loma",system-ui,sans-serif; }
+  #caption .done { color:#9ca3af; } #caption .cur { color:#fde68a; } #caption .next { color:#4b5563; }
+  textarea { font:inherit; width:100%; border:1px solid var(--line); border-radius:7px; padding:6px 8px; }
+  input[type=text] { font:inherit; border:1px solid var(--line); border-radius:7px; padding:6px 8px; }
+  .wide { grid-column: 1 / -1; }
+  .pointgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:6px; margin:8px 0; }
+  .pointgrid button { text-align:left; padding:6px 8px; line-height:1.25; }
+  .pointgrid button small { color:var(--mute); display:block; font-size:11px; }
+  .pointgrid button.cur { border-color:var(--sel); background:#fef3c7; }
+  input, select, textarea { font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); }
+  input[type=number] { width:76px; }
+  .row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0; }
+  table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
+  td { padding:2px 4px; border-bottom:1px solid #f0f2f5; } td.n { text-align:right; }
+  .bar { height:8px; background:#eef0f4; border-radius:4px; overflow:hidden; }
+  .bar > div { height:100%; background:var(--acc); }
+  .mute { color:var(--mute); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+  .msg { min-height:1.4em; }
+  #lsnMode button { padding:5px 10px; }
+  #pttBtn { user-select:none; touch-action:none; }
+  #pttBtn.held { background:var(--bad); border-color:var(--bad); color:#fff; }
+  #lsnLines { max-height:190px; overflow:auto; border:1px solid var(--line); border-radius:7px; margin-top:6px; font-size:13px; }
+  #lsnLines div { padding:4px 8px; border-bottom:1px solid #f3f4f6; }
+  #lsnLines div.ign { color:var(--mute); }
+  #lsnLines small { color:var(--mute); }
+  /* shop editor */
+  #shop { gap:0; }
+  #canvasWrap { flex:1; position:relative; min-width:0; background:#e5e7eb; }
+  #map { position:absolute; inset:0; width:100%; height:100%; cursor:crosshair; }
+  #tools { position:absolute; top:10px; left:10px; display:flex; gap:4px; flex-wrap:wrap; background:rgba(255,255,255,.92);
+           padding:6px; border-radius:9px; border:1px solid var(--line); max-width:calc(100% - 20px); }
+  #hint { position:absolute; bottom:10px; left:10px; right:10px; background:rgba(29,35,48,.85); color:#fff; padding:6px 10px;
+          border-radius:7px; font-size:13px; pointer-events:none; }
+  #side { width:380px; max-width:45vw; overflow:auto; border-left:1px solid var(--line); background:#fff; padding:10px 14px; }
+  #side h3 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); margin:14px 0 6px; }
+  #side label { display:inline-flex; gap:4px; align-items:center; }
+  .blist { max-height:220px; overflow:auto; border:1px solid var(--line); border-radius:7px; }
+  .blist div { padding:4px 8px; cursor:pointer; display:flex; gap:8px; align-items:center; border-bottom:1px solid #f3f4f6; }
+  .blist div.sel { background:#fef3c7; }
+  .sw { width:12px; height:12px; border-radius:3px; flex:none; border:1px solid #0002; }
+  .grid2 { display:grid; grid-template-columns:auto 1fr; gap:4px 8px; align-items:center; }
+  .grid2 input[type=text], .grid2 textarea { width:100%; }
+  #view { width:100%; border-radius:8px; border:1px solid var(--line); background:#ddd; aspect-ratio:4/3; object-fit:cover; }
+  @media (max-width: 760px) { #shop.on { flex-direction:column; } #side { width:auto; max-width:none; border-left:none; } #canvasWrap { min-height:60vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>exp05 · G1 greeter</h1>
+  <button class="tab on" data-page="operate">Operate</button>
+  <button class="tab" data-page="shop">Shop</button>
+  <button class="tab" data-page="scripts">Scripts &amp; voice</button>
+  <span id="link" class="pill">link …</span>
+  <span id="mode" class="pill">arms …</span>
+  <span id="activeShop" class="pill">shop …</span>
+  <span style="flex:1"></span>
+  <span class="seg" id="langSeg"><button data-l="th" onclick="setLang('th')">ไทย</button><button data-l="en" onclick="setLang('en')">EN</button></span>
+  <select id="audioSel" title="audio output" onchange="post('/api/settings',{audio:this.value})"></select>
+  <span id="aiPill" class="pill" title="AI service: TTS + LLM (exp05/ai/run_ai.sh)">AI …</span>
+  <a href="/monitor" target="_blank" style="color:#cbd5e1;font-size:12px">monitor ↗</a>
+  <button class="estop" onclick="arm('estop')">E-STOP (release arms)</button>
+</header>
+
+<!-- ================= OPERATE ================= -->
+<main id="operate" class="page on">
+  <section class="card">
+    <h2>Actions</h2>
+    <div class="row">
+      <button class="primary big" onclick="act('/api/intro')">🙏 Sawasdee + introduce</button>
+      <button class="primary big" onclick="act('/api/service')">Introduce service</button>
+    </div>
+    <div class="row">
+      <button class="big" onclick="post('/api/stop',{})">■ Stop (rest)</button>
+      <label title="small hand motion while standing, so the robot never looks frozen"><input type="checkbox" id="idleOn" checked
+        onchange="post('/api/settings',{idle:this.checked})"> keep-alive idle</label>
+    </div>
+    <h2 style="margin-top:12px">Answer a question</h2>
+    <div class="row"><input type="text" id="q" placeholder="type the customer's question (ไทย / English)" style="flex:1"
+         onkeydown="if(event.key==='Enter')ask()"> <button onclick="ask()">Ask</button></div>
+    <div id="faqBtns" class="row" style="gap:4px"></div>
+    <textarea id="ans" rows="3" placeholder="answer (editable before speaking)"></textarea>
+    <div class="row"><span id="ansInfo" class="mute" style="flex:1"></span>
+      <button class="primary" onclick="speakAns(false)">Speak</button>
+      <button id="speakPoint" class="primary" style="display:none" onclick="speakAns(true)">Speak + point</button></div>
+    <div class="msg mute" id="amsg"></div>
+  </section>
+  <section class="card">
+    <h2>Listen (speech recognition) <span class="mute" id="lsnInfo"></span></h2>
+    <div class="row">
+      <span id="lsnMode">
+        <button data-m="off" onclick="lsn({mode:'off'})">Off</button><button data-m="ptt" onclick="lsn({mode:'ptt'})"
+          title="listen only while the button (or the space bar) is held">Push-to-talk</button><button data-m="auto"
+          onclick="lsn({mode:'auto'})" title="always listening; muted while the robot speaks">Auto-listen</button>
+      </span>
+      <button id="pttBtn" class="big" style="display:none">🎤 Hold to talk</button>
+    </div>
+    <div class="row"><span id="lsnState" class="pill">off</span>
+      <span class="mute">mic</span><div class="bar" style="flex:1" title="microphone level"><div id="lsnLevel" style="width:0"></div></div></div>
+    <div class="row" style="gap:12px">
+      <label title="auto: answer and speak at once (points at the booth when the answer names one); review: put the text in the question box above, you press Speak">reply
+        <select id="lsnReply" onchange="lsn({reply:this.value})"><option value="auto">answer automatically</option><option value="review">put in the question box</option></select></label>
+      <label title="Auto-listen: ignore speech that is not a question or request for the robot (passers-by talking)"><input type="checkbox" id="lsnRel"
+        onchange="lsn({relevance:this.checked})"> only questions</label>
+      <label title="Auto-listen only while a customer is in front (vision module, 2.3) and 8 s after each answer"><input type="checkbox" id="lsnGate"
+        onchange="lsn({presence_gate:this.checked})"> only with a customer <span id="lsnPresent" class="mute"></span></label>
+    </div>
+    <div id="lsnLines"></div>
+    <div class="msg mute" id="lmsg"></div>
+  </section>
+  <section class="card">
+    <h2>Caption <span class="mute" id="capInfo"></span></h2>
+    <div id="caption"></div>
+    <div class="mute" id="actionTop" style="margin-top:6px"></div>
+  </section>
+  <section class="card">
+    <h2>Upper body (rt/arm_sdk)</h2>
+    <div class="row">
+      <button class="primary" onclick="arm('takeover')">Take over arms</button>
+      <button onclick="arm('release')">Release to Unitree</button>
+    </div>
+    <div class="row">weight <div class="bar" style="flex:1"><div id="wbar" style="width:0"></div></div> <span id="w">0</span></div>
+    <div class="row">speed <input id="speed" type="range" min="0.1" max="1" step="0.05" value="0.5" style="flex:1"
+         onchange="post('/api/speed',{scale:+this.value})"> <span id="speedv">0.5</span></div>
+    <div class="row" id="poses"></div>
+    <div class="msg mute" id="msg"></div>
+  </section>
+  <section class="card">
+    <h2>Point to a booth (active shop)</h2>
+    <div class="row">
+      <label>hold <input id="holdS" type="number" min="0.5" max="60" step="0.5" value="4" style="width:60px"> s</label>
+      <label><input type="checkbox" id="holdOn"> hold until the next action</label>
+      <button onclick="post('/api/rest',{})">Rest</button>
+    </div>
+    <div id="pointBtns" class="pointgrid"><span class="mute">loading plans…</span></div>
+    <div class="mute" id="action" style="margin-top:6px"></div>
+    <div class="msg mute" id="pmsg"></div>
+  </section>
+  <section class="card">
+    <h2>3D view</h2>
+    <img id="view" alt="3D view">
+    <div class="row">
+      <select id="cam"><option value="behind">behind the robot</option><option value="front">facing the robot</option><option value="top">shop from above</option></select>
+      <select id="viewBooth"><option value="">no target line</option></select>
+      <label><input type="checkbox" id="viewOn" checked> live</label>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Hands (Inspire, 5 fingers)</h2>
+    <div class="row" id="hands"></div>
+    <table id="handt"></table>
+    <h2 style="margin-top:14px">Balance (simulation)</h2>
+    <div id="bal" class="mute">—</div>
+  </section>
+  <section class="card">
+    <h2>Joints (measured / target, deg)</h2>
+    <table id="jt"></table>
+  </section>
+</main>
+
+<!-- ================= SHOP EDITOR ================= -->
+<main id="shop" class="page">
+  <div id="canvasWrap">
+    <canvas id="map"></canvas>
+    <div id="tools">
+      <button data-tool="select" class="on" title="select, drag booths / robot / aim points; drag empty space to pan">Select</button>
+      <button data-tool="booth" title="drag a rectangle">+ Booth</button>
+      <button data-tool="robot" title="click = position, drag = heading">Robot</button>
+      <button data-tool="aim" title="click: aim point of the selected booth">Aim point</button>
+      <button data-tool="scale" title="click two points of known distance">Scale</button>
+      <button data-tool="origin" title="click the point that should be (0, 0)">Origin</button>
+      <button onclick="fitView()" title="zoom to the whole map">Fit</button>
+    </div>
+    <div id="hint"></div>
+  </div>
+  <aside id="side">
+    <div class="row">
+      <select id="shopSel"></select>
+      <button onclick="loadShop($('shopSel').value)">Load</button>
+      <button onclick="newShop(false)">New</button>
+      <button onclick="newShop(true)">Copy</button>
+    </div>
+    <div class="row">
+      <button class="primary" id="saveBtn" onclick="saveShop()">Save</button>
+      <button onclick="makeActive()" title="the shop the robot works in">Use for robot</button>
+      <span id="dirty" class="mute"></span>
+    </div>
+    <div class="msg" id="smsg"></div>
+
+    <h3>Background map</h3>
+    <div class="row">
+      <input type="file" id="bgFile" accept="image/png,image/jpeg,image/webp" style="max-width:220px">
+      <button onclick="uploadBg()">Upload</button>
+    </div>
+    <div class="grid2">
+      <span>scale</span><span><input type="number" id="res" step="0.001" min="0.0001"> m/px <span id="bgInfo" class="mute"></span></span>
+      <span>map origin</span><span><input type="number" id="ox" step="0.1"> <input type="number" id="oy" step="0.1"> m <span class="mute">(bottom-left corner)</span></span>
+    </div>
+    <label class="mute"><input type="checkbox" id="moveWithMap" checked> Scale / Origin tools keep robot and booths on the map</label>
+
+    <h3>Robot</h3>
+    <div class="grid2">
+      <span>position</span><span><input type="number" id="rx" step="0.1"> <input type="number" id="ry" step="0.1"> m</span>
+      <span>heading</span><span><input type="number" id="ryaw" step="1"> ° <span class="mute">(90 = up on the map)</span></span>
+      <span>torso turn</span><span><input type="number" id="tk" step="0.05" min="0" max="1"> × angle, max <input type="number" id="tmax" step="1" min="0" max="45"> °</span>
+    </div>
+
+    <h3>Booths <span id="nb" class="mute"></span></h3>
+    <div class="blist" id="blist"></div>
+    <div id="bedit" style="display:none">
+      <h3>Selected booth</h3>
+      <div class="grid2">
+        <span>id</span><input type="text" id="b_id">
+        <span>name TH</span><input type="text" id="b_name_th">
+        <span>name EN</span><input type="text" id="b_name_en">
+        <span>corner</span><span><input type="number" id="b_x" step="0.1"> <input type="number" id="b_y" step="0.1"> m</span>
+        <span>size</span><span><input type="number" id="b_w" step="0.1" min="0.1"> × <input type="number" id="b_h" step="0.1" min="0.1"> m</span>
+        <span>rotation</span><span><input type="number" id="b_a" step="1"> °</span>
+        <span>aim point</span><span><input type="number" id="b_ax" step="0.1"> <input type="number" id="b_ay" step="0.1"> m, height <input type="number" id="b_az" step="0.1" min="0" max="5"> m</span>
+        <span>colour</span><input type="color" id="b_color">
+        <span>about TH</span><textarea id="b_dth" rows="2"></textarea>
+        <span>about EN</span><textarea id="b_den" rows="2"></textarea>
+        <span>labels</span><input type="text" id="b_labels" placeholder="comma separated">
+      </div>
+      <div id="bgeo" class="row"></div>
+      <div class="row"><button onclick="centreAim()">Aim = centre</button><button onclick="delBooth()" class="bad">Delete booth</button></div>
+    </div>
+  </aside>
+</main>
+
+<!-- ================= SCRIPTS & VOICE ================= -->
+<main id="scripts" class="page">
+  <section class="card wide">
+    <h2>Texts the robot speaks (active shop) <span class="mute">— [welcome] [present] [both] in a text start a gesture;
+      {robot}, {shop}, {name} are filled in</span></h2>
+    <div id="scriptForm"></div>
+    <div class="row"><button class="primary" onclick="saveScripts()">Save texts</button>
+      <span class="mute">saving re-renders the voice for all fixed texts in the background</span></div>
+    <div class="msg mute" id="smsg"></div>
+  </section>
+  <section class="card">
+    <h2>Voice</h2>
+    <div class="row">voice <select id="voiceSel" onchange="post('/api/settings',{voice:this.value},'vmsg')"></select>
+      <button onclick="loadVoices()">↻</button></div>
+    <div class="mute" id="voiceInfo"></div>
+    <div class="row" style="margin-top:8px"><span style="width:110px">speaking speed</span>
+      <input type="range" id="rateSl" min="0.8" max="1.2" step="0.05" style="flex:1"
+        oninput="$('rateVal').textContent = (+this.value).toFixed(2) + '×'" onchange="setRate(this.value)">
+      <b id="rateVal" style="width:52px">1.00×</b></div>
+    <div class="mute">slower for older customers or a noisy entrance; the arms and captions follow the speech at any
+      speed (the voice is generated at that speed). Changing it re-renders the fixed texts in the background.</div>
+    <div class="row" style="margin-top:6px"><span style="width:110px">volume (<span id="volOut">laptop</span>)</span>
+      <input type="range" id="volSl" min="0" max="100" step="5" style="flex:1"
+        oninput="volShow(this.value)" onchange="setVolume(this.value)">
+      <b id="volVal" style="width:52px">—</b></div>
+    <div class="mute">per output: laptop = this computer's playback level; robot = the robot speaker's own level.
+      Set it at the entrance with the shop's normal noise, from about 1.5 m.</div>
+    <h2 style="margin-top:12px">Test sentence</h2>
+    <div class="row"><input type="text" id="testText" value="สวัสดีค่ะ ยินดีต้อนรับนะคะ" style="flex:1">
+      <button onclick="act('/api/say',{text:$('testText').value, lang:/[\u0E00-\u0E7F]/.test($('testText').value)?'th':'en'},'vmsg')">Say</button></div>
+    <h2 style="margin-top:12px">Upload a reference voice (cloning)</h2>
+    <div class="mute">5–12 s of one person speaking clearly, plus exactly what is said. Only with that person's
+      consent. The clone copies the voice <i>and</i> the tone: read in the friendly, polite tone the robot should use.</div>
+    <div class="row" style="margin-top:6px">reading script <select id="recScript" onchange="pickScript()" style="flex:1"></select></div>
+    <div id="recText" style="font-size:20px;line-height:1.6;padding:10px 12px;margin:6px 0;border:1px solid var(--line);border-radius:8px;background:var(--bg)"></div>
+    <details class="mute"><summary>how to record</summary>
+      <ul style="margin:4px 0 0 18px;padding:0">
+        <li>quiet room, no music, fan or echo (curtains or a sofa help); one speaker only</li>
+        <li>microphone (phone or headset) 20–30 cm from the mouth, a little to the side; do not touch it</li>
+        <li>wait half a second, read calmly in one take, wait half a second, stop</li>
+        <li>if a word is read differently, correct the transcript below so it matches exactly; numbers as words</li>
+        <li>record 2–3 takes or sentences under different names, compare them with <b>Say</b>, keep the best</li>
+      </ul></details>
+    <div class="row" style="margin-top:6px">
+      <button id="recBtn" onclick="toggleRecord()">● Record</button>
+      <span id="recTime" class="mute">0.0 s</span>
+      <audio id="recPlay" controls style="height:32px;display:none"></audio>
+      <span class="mute">or a file:</span> <input type="file" id="vFile" accept="audio/*" onchange="recBlob = null; $('recPlay').style.display='none'; $('recTime').textContent='file chosen'">
+    </div>
+    <div class="row"><input type="text" id="vName" placeholder="voice name (letters, digits, _ -)" style="width:200px"></div>
+    <textarea id="vText" rows="2" placeholder="transcript of the recording"></textarea>
+    <div class="row"><label><input type="checkbox" id="vConsent"> the speaker agreed to this use</label>
+      <button onclick="uploadVoice()">Upload</button></div>
+    <div class="msg mute" id="vmsg"></div>
+  </section>
+  <section class="card">
+    <h2>Motion learned from video</h2>
+    <div id="clipInfo" class="mute">—</div>
+    <h3 style="margin:14px 0 4px">Teach from a new video</h3>
+    <div class="mute">Nothing changes on the robot until you press <b>Use this</b>; the current version is kept as a backup.</div>
+    <div class="row" style="margin-top:6px">
+      <label><input type="radio" name="vidKind" value="wai" checked onchange="vidKindChanged()"> <b>Wai</b> (Sawasdee + introduce)</label>
+      <label><input type="radio" name="vidKind" value="idle" onchange="vidKindChanged()"> <b>Keep-alive style</b> (idle + talking gestures)</label>
+    </div>
+    <div class="mute" id="vidHint" style="margin-top:4px"></div>
+    <div class="row" style="margin-top:6px"><input type="file" id="vidFile" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv,.avi">
+      <span class="mute">part of the video (s): from</span> <input type="number" id="vidStart" min="0" step="0.5" placeholder="0" style="width:70px">
+      <span class="mute">to</span> <input type="number" id="vidEnd" min="0" step="0.5" placeholder="end" style="width:70px">
+      <button id="vidBtn" onclick="uploadVideo()">Upload and process</button></div>
+    <div class="msg mute" id="vidMsg"></div>
+    <div id="vidJob"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const D2R = Math.PI / 180;
+async function post(path, body, msgEl = 'msg') {
+  const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const j = await r.json(); if ($(msgEl)) $(msgEl).textContent = j.ok === false ? ('⚠ ' + (j.reason || 'failed')) : ''; return j;
+}
+const arm = a => post('/api/arm', {action:a});
+const deg = v => v == null ? '—' : (v / D2R).toFixed(1);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- tabs
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === b.dataset.page));
+  if (b.dataset.page === 'shop') { resize(); if (!S.shop) loadShop(null); }
+  if (b.dataset.page === 'operate') { loadPlans(); loadViewBooths(); }  // the shop may have been edited
+  if (b.dataset.page === 'scripts') { loadScripts(); loadVoices(); loadClips(); initVideoCard(); initRecScripts(); }
+});
+
+// ---------- operate
+let built = false;
+function build(s) {
+  $('poses').innerHTML = 'test pose: ' + s.test_poses.map(p => `<button onclick="post('/api/pose',{name:'${p}'})">${p}</button>`).join('');
+  $('hands').innerHTML = s.hand_poses.map(p => `<button onclick="post('/api/hands',{pose:'${p}',side:'both'})">${p}</button>`).join('');
+  built = true;
+}
+const FINGERS = ['pinky','ring','middle','index','thumb bend','thumb rot'];
+let activeName = null;
+async function tick() {
+  try {
+    const s = await (await fetch('/api/status')).json();
+    if (!built) build(s);
+    const a = s.arm;
+    $('link').textContent = (s.sim ? 'SIM' : 'ROBOT') + (a.state_ok ? ' · state ok' : ' · NO STATE');
+    $('link').className = 'pill ' + (a.state_ok ? 'ok' : 'bad');
+    $('mode').textContent = 'arms ' + a.mode + (a.reason ? ' (' + a.reason + ')' : '');
+    $('mode').className = 'pill ' + (a.mode === 'released' ? '' : 'warn');
+    $('activeShop').textContent = 'shop ' + (s.shop || '—');
+    if (s.shop !== activeName) { activeName = s.shop; loadViewBooths(); loadPlans(); loadFaq(); }
+    showAction(s.action);
+    showLive(s);
+    $('w').textContent = a.weight.toFixed(2); $('wbar').style.width = (a.weight * 100) + '%';
+    $('speedv').textContent = a.speed_scale.toFixed(2);
+    $('jt').innerHTML = s.joints.map((n, i) => `<tr><td>${n.replace('_joint','')}</td><td class="n">${deg(a.q && a.q[i])}</td><td class="n mute">${deg(a.target && a.target[i])}</td></tr>`).join('');
+    if (a.hands) $('handt').innerHTML = '<tr><td></td>' + FINGERS.map(f => `<td class="n mute">${f}</td>`).join('') + '</tr>' +
+      ['right','left'].map((sd, k) => `<tr><td>${sd}</td>` + a.hands.slice(k*6, k*6+6).map(v => `<td class="n">${v.toFixed(2)}</td>`).join('') + '</tr>').join('');
+    const b = s.balance;
+    $('bal').innerHTML = b ? `ZMP margin <b class="${b.zmp_margin < 0.03 ? 'bad' : ''}">${(b.zmp_margin*100).toFixed(1)} cm</b> · COM margin ${(b.com_margin*100).toFixed(1)} cm
+      <div class="mute">+ = inside the feet; keep above ~3 cm</div>` : (s.sim ? 'no data' : 'not available on the real robot');
+  } catch (e) { $('link').textContent = 'server offline'; $('link').className = 'pill bad'; }
+}
+setInterval(tick, 250); tick();
+
+async function loadViewBooths() {
+  if (!activeName) return;
+  const j = await (await fetch('/api/shop?name=' + encodeURIComponent(activeName))).json();
+  if (!j.ok) return;
+  const cur = $('viewBooth').value;
+  $('viewBooth').innerHTML = '<option value="">no target line</option>' +
+    j.shop.booths.map(b => `<option value="${esc(b.id)}">${esc(b.name_en || b.id)}</option>`).join('');
+  $('viewBooth').value = curBooth || cur;
+}
+// ---------- actions, answer, caption
+let settings = null, audioBuilt = false;
+async function act(path, body = {}, msgEl = 'amsg') { return post(path, body, msgEl); }
+function setLang(l) { post('/api/settings', {lang:l}); }
+function volShow(v) { $('volVal').textContent = v + ' %'; $('volSl').value = v; }
+async function setVolume(v) { const j = await post('/api/settings', {volume: +v}, 'vmsg'); if (j.settings) settings = j.settings; }
+async function setRate(v) {
+  const j = await post('/api/settings', {speech_rate: +v}, 'vmsg');
+  if (j.ok) $('vmsg').textContent = `speaking speed ${(+v).toFixed(2)}× — fixed texts are being re-rendered; press Say to hear it`;
+}
+function showAudioSettings(st) {
+  const busy = [$('volSl'), $('rateSl')].includes(document.activeElement);
+  if (busy) return;
+  const out = st.audio, v = st.volume ? st.volume[out] : null;
+  $('volOut').textContent = out;
+  const off = out === 'off' || v == null;
+  $('volSl').disabled = off;
+  if (v != null) volShow(v); else $('volVal').textContent = out === 'off' ? 'silent' : 'unknown';
+  if (st.speech_rate != null) { $('rateSl').value = st.speech_rate; $('rateVal').textContent = (+st.speech_rate).toFixed(2) + '×'; }
+}
+async function ask() {
+  const q = $('q').value.trim(); if (!q) return;
+  $('ansInfo').textContent = 'thinking…'; $('speakPoint').style.display = 'none';
+  const j = await post('/api/ask', {question:q}, 'amsg');
+  if (j.ok === false) { $('ansInfo').textContent = ''; return; }
+  $('ans').value = j.answer; $('ans').dataset.lang = j.lang; $('ans').dataset.booth = j.booth || '';
+  $('ansInfo').textContent = `${j.lang.toUpperCase()} · ${j.source} · ${j.seconds} s` + (j.booth ? ` · booth: ${j.booth}` : '') + (j.warning ? ' · ⚠ ' + j.warning : '');
+  if (j.booth) { $('speakPoint').style.display = ''; $('speakPoint').textContent = 'Speak + point to ' + j.booth; }
+}
+function speakAns(point) {
+  const text = $('ans').value.trim(); if (!text) return;
+  const lang = /[\u0E00-\u0E7F]/.test(text) ? 'th' : 'en';
+  if (point && $('ans').dataset.booth) act('/api/point', {booth:$('ans').dataset.booth, text, lang, hold_s:2});
+  else act('/api/say', {text, lang});
+}
+async function loadFaq() {
+  if (!activeName) return;
+  const j = await (await fetch('/api/shop?name=' + encodeURIComponent(activeName))).json();
+  if (!j.ok) return;
+  const lang = settings ? settings.lang : 'th';
+  $('faqBtns').innerHTML = (j.shop.faq || []).map((f, i) => `<button style="font-size:12px;padding:3px 8px" data-q="${esc(f['q_' + lang] || f.q_th)}"
+     onclick="$('q').value=this.dataset.q; ask()">${esc(f['q_' + lang] || f.q_th)}</button>`).join('');
+}
+// ---------- listen (speech recognition)
+const lsn = body => post('/api/listen', body, 'lmsg');
+let lsnSeen = null, pttHeld = false;
+function ptt(down) {
+  if (down === pttHeld) return;
+  pttHeld = down; $('pttBtn').classList.toggle('held', down);
+  post('/api/listen/ptt', {down}, 'lmsg');
+}
+$('pttBtn').addEventListener('pointerdown', e => { e.preventDefault(); $('pttBtn').setPointerCapture(e.pointerId); ptt(true); });
+['pointerup', 'pointercancel'].forEach(ev => $('pttBtn').addEventListener(ev, () => ptt(false)));
+const typing = () => ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+document.addEventListener('keydown', e => { if (e.code === 'Space' && !e.repeat && settingsListen === 'ptt' && !typing() && $('operate').classList.contains('on')) { e.preventDefault(); ptt(true); } });
+document.addEventListener('keyup', e => { if (e.code === 'Space' && pttHeld) { e.preventDefault(); ptt(false); } });
+let settingsListen = 'off';
+function showListen(L) {
+  if (!L) return;
+  settingsListen = L.mode;
+  document.querySelectorAll('#lsnMode button').forEach(b => b.classList.toggle('on', b.dataset.m === L.mode));
+  $('pttBtn').style.display = L.mode === 'ptt' ? '' : 'none';
+  if (document.activeElement !== $('lsnReply')) $('lsnReply').value = L.reply;
+  $('lsnRel').checked = L.relevance; $('lsnGate').checked = L.presence_gate;
+  $('lsnPresent').textContent = L.presence_gate ? (L.present ? '(customer present)' : L.followup_s > 0 ? `(follow-up ${L.followup_s} s)` : '(nobody)') : '';
+  const st = L.error ? '⚠ ' + L.error : L.state;
+  $('lsnState').textContent = st;
+  $('lsnState').className = 'pill ' + (L.error ? 'bad' : L.state === 'hearing' ? 'ok' : ['recognising', 'answering', 'muted'].includes(L.state) ? 'warn' : '');
+  const pct = L.mode === 'off' || !L.mic ? 0 : Math.max(0, Math.min(100, (L.level_db + 70) / 60 * 100));
+  $('lsnLevel').style.width = pct + '%';
+  $('lsnLevel').style.background = L.state === 'hearing' ? 'var(--ok)' : 'var(--acc)';
+  $('lsnInfo').textContent = `source: ${L.source}` + (L.mic_name ? ' · ' + L.mic_name.slice(0, 60) : '');
+  const key = L.lines.map(l => l.id + (l.action || '') + (l.answer ? 1 : 0)).join(',');
+  if (key !== $('lsnLines').dataset.key) {
+    $('lsnLines').dataset.key = key;
+    $('lsnLines').innerHTML = L.lines.length ? L.lines.map(l => `<div class="${l.ignored ? 'ign' : ''}"><small>${l.time}</small> ${l.text ? '“' + esc(l.text) + '”' : ''}
+      <small>${l.ignored ? '· ignored: ' + esc(l.ignored) : ''}${l.confidence != null ? ` · conf ${l.confidence.toFixed(2)}` : ''}${l.asr_s != null ? ` · ASR ${l.asr_s.toFixed(2)} s` : ''}${l.action ? ' · ' + esc(l.action) : ''}</small>
+      ${l.answer ? `<br><small>→ ${esc(l.answer)} (${esc(l.source || '')}, ${l.answer_s} s)</small>` : ''}</div>`).join('')
+      : '<div class="mute">nothing heard yet</div>';
+  }
+  // review mode: a new recognised question goes to the question box and is answered there (the operator presses Speak)
+  const newest = L.lines[0];
+  if (lsnSeen === null) lsnSeen = newest ? newest.id : 0;
+  else if (newest && newest.id > lsnSeen) {
+    lsnSeen = newest.id;
+    if (newest.action === 'review' && newest.text) { $('q').value = newest.text; ask(); }
+  }
+}
+let lastLang = null;
+function showLive(s) {
+  settings = s.settings;
+  showListen(s.listen);
+  if (s.settings.lang !== lastLang) { lastLang = s.settings.lang; loadFaq(); }
+  document.querySelectorAll('#langSeg button').forEach(b => b.classList.toggle('on', b.dataset.l === s.settings.lang));
+  if (!audioBuilt && s.audio_outputs) { $('audioSel').innerHTML = s.audio_outputs.map(o => `<option value="${o}">🔊 ${o}</option>`).join(''); audioBuilt = true; }
+  if (document.activeElement !== $('audioSel')) $('audioSel').value = s.settings.audio;
+  $('idleOn').checked = s.settings.idle;
+  showAudioSettings(s.settings);
+  const ai = s.ai;
+  $('aiPill').textContent = !ai ? 'AI offline' : ('AI ' + (ai.llm ? 'TTS+LLM' : ai.llm_loading ? 'TTS, LLM loading' : 'TTS only') + (ai.asr ? '+ASR' : ai.asr_loading ? ', ASR loading' : '') + ` · ${ai.gpu_gb} GB`);
+  $('aiPill').className = 'pill ' + (!ai ? 'bad' : ai.llm ? 'ok' : 'warn');
+  const c = s.caption;
+  if (!c) { $('caption').innerHTML = '<span class="next">—</span>'; $('capInfo').textContent = ''; }
+  else {
+    const k = c.full.indexOf(c.text);
+    $('caption').innerHTML = k < 0 ? `<span class="cur">${esc(c.text)}</span>` :
+      `<span class="done">${esc(c.full.slice(0, k))}</span><span class="cur">${esc(c.text)}</span><span class="next">${esc(c.full.slice(k + c.text.length))}</span>`;
+    $('capInfo').textContent = `${c.lang.toUpperCase()} · phrase ${c.i + 1}/${c.n}`;
+  }
+  const a = s.action;
+  $('actionTop').textContent = a && a.name ? `${a.name}${a.booth ? ' → ' + a.booth : ''} · ${a.phase || ''}${a.t != null && !['done','stopped'].includes(a.phase) ? ' ' + a.t.toFixed(1) + ' s' : ''}${a.reason ? ' · ' + a.reason : ''}` : '';
+}
+
+// ---------- scripts & voice
+const SCRIPT_ROWS = [['robot','robot name'],['shop','shop name'],['intro','self-introduction (after the wai)'],['service','service introduction'],
+  ['point','pointing sentence ({name})'],['filler','while thinking'],['unknown','no information']];
+async function loadScripts() {
+  const j = await (await fetch('/api/scripts')).json();
+  $('scriptForm').innerHTML = '<div class="sgrid"><b></b><b>ไทย</b><b>English</b>' + SCRIPT_ROWS.map(([k, label]) =>
+    `<span class="mute">${label}</span>` + ['th','en'].map(l => `<textarea id="sc_${k}_${l}" rows="${['intro','service'].includes(k) ? 4 : 1}">${esc(j.scripts[k + '_' + l])}</textarea>`).join('')).join('') + '</div>';
+}
+async function saveScripts() {
+  const sc = {}; for (const [k] of SCRIPT_ROWS) for (const l of ['th','en']) sc[k + '_' + l] = $(`sc_${k}_${l}`).value;
+  const j = await post('/api/scripts', {scripts:sc}, 'smsg'); if (j.ok) $('smsg').textContent = 'saved';
+}
+async function loadVoices() {
+  const j = await (await fetch('/api/voices')).json();
+  const cur = settings ? settings.voice : 'default';
+  if (!j.ok) { $('voiceInfo').textContent = '⚠ ' + (j.reason || 'AI service offline'); return; }
+  $('voiceSel').innerHTML = j.voices.map(v => `<option value="${esc(v.name)}">${esc(v.name)}${v.note ? ' — ' + esc(v.note) : ''}</option>`).join('');
+  $('voiceSel').value = cur;
+  $('voiceInfo').textContent = j.clone ? 'voice cloning: F5-TTS-THAI available' : 'voice cloning engine not installed (uploaded voices fall back to the default voice)';
+}
+async function loadClips(body) {
+  const j = body ? await post('/api/clips', body, 'vmsg') : await (await fetch('/api/clips')).json();
+  const w = j.wai, i = j.idle;
+  let h = '';
+  if (w) {
+    h += `<label><input type="checkbox" ${w.enabled !== false ? 'checked' : ''} onchange="loadClips({wai_enabled:this.checked})">
+      <b>wai</b> from <code>${esc(w.source)}</code> ${w.segment_s ? w.segment_s.map(x => x.toFixed(1)).join('–') + ' s' : ''}</label>
+      <div>fingertips at ${w.params.tip_z_m} m, tilt ${w.params.tilt_deg}°, raise: ${esc(w.params.raise)}, lower: ${esc(w.params.lower)}</div>
+      <div>checks: palm gap ${(w.checks.palm_gap_min_m * 100).toFixed(1)} cm, symmetry ${w.checks.mirror_err_deg}°, peak ${w.checks.peak_speed_rad_s} rad/s ${w.ok ? '✅' : '⚠'}</div>`;
+    if (w.compare) h += `<img src="/clips/source/${encodeURIComponent(w.compare)}" style="width:100%;margin-top:6px;border-radius:6px" alt="video vs robot">`;
+  } else h += '<div>wai: procedural (no clip learned from a video)</div>';
+  h += i ? `<div style="margin-top:6px"><b>keep-alive style</b> from <code>${esc(i.source)}</code>: amplitude ×${i.idle_amp_scale}, speed ×${i.idle_speed_scale}, beat every ${i.beat_every} phrase(s)</div>`
+         : '<div style="margin-top:6px">keep-alive style: defaults (no video installed)</div>';
+  $('clipInfo').innerHTML = h;
+}
+// ---------------------------------------------------------------- motion learned from video: upload
+const VID_HINTS = {
+  wai: 'One person doing a wai: upper body and both hands in the picture, camera still (tripod), 5–40 s. The robot copies the hold height, tilt, speed and fingers.',
+  idle: 'One person standing and talking calmly: upper body and both hands in the picture, 20–90 s. The robot copies how much and how fast the hands move, and how often it gestures.'};
+const vidKind = () => document.querySelector('input[name=vidKind]:checked').value;
+function vidKindChanged() { $('vidHint').textContent = VID_HINTS[vidKind()]; }
+let vidTimer = null;
+function uploadVideo() {
+  const f = $('vidFile').files[0];
+  if (!f) { $('vidMsg').textContent = '⚠ choose a video file'; return; }
+  const st = $('vidStart').value || 0, en = $('vidEnd').value || 0;
+  const q = `kind=${vidKind()}&name=${encodeURIComponent(f.name)}&start=${st}&end=${en}`;
+  const x = new XMLHttpRequest();  // XHR for the upload progress
+  x.open('POST', '/api/video/upload?' + q);
+  x.upload.onprogress = e => { if (e.lengthComputable) $('vidMsg').textContent = `uploading… ${Math.round(100 * e.loaded / e.total)} %`; };
+  x.onload = () => {
+    let j; try { j = JSON.parse(x.responseText); } catch (e) { j = {ok: false, reason: 'server error ' + x.status}; }
+    if (!j.ok) { $('vidMsg').textContent = '⚠ ' + j.reason; return; }
+    $('vidMsg').textContent = '';
+    showVideoJob(j.job); pollVideoJob();
+  };
+  x.onerror = () => { $('vidMsg').textContent = '⚠ upload failed (connection)'; };
+  $('vidBtn').disabled = true;
+  x.onloadend = () => { $('vidBtn').disabled = false; };
+  x.send(f);
+}
+function pollVideoJob() {
+  clearTimeout(vidTimer);
+  vidTimer = setTimeout(async () => {
+    const j = await (await fetch('/api/video/job')).json();
+    showVideoJob(j.job);
+    if (j.job && j.job.status === 'running') pollVideoJob();
+  }, 1500);
+}
+function showVideoJob(job) {
+  if (!job) { $('vidJob').innerHTML = ''; return; }
+  const kindName = job.kind === 'wai' ? 'wai' : 'keep-alive style';
+  let h = `<div style="margin-top:8px;padding:8px;border:1px solid var(--line, #8884);border-radius:8px">
+    <div><b>${esc(kindName)}</b> from <code>${esc(job.video)}</code> — ${esc(job.step)} ${job.status === 'running' ? '⏳ ' + job.elapsed_s + ' s' : ''}</div>`;
+  if (job.status === 'running' && job.log.length) h += `<pre class="mute" style="white-space:pre-wrap;max-height:90px;overflow:auto;margin:4px 0;font-size:11px">${esc(job.log.slice(-4).join('\n'))}</pre>`;
+  if (job.status === 'failed') h += `<div>⚠ ${esc(job.reason)}</div>`;
+  const r = job.result;
+  if (r && job.kind === 'wai') {
+    const c = r.checks;
+    h += `<div>video ${r.segment_s ? r.segment_s.map(x => (+x).toFixed(1)).join('–') + ' s' : ''}, fingertips at ${r.params.tip_z_m} m, tilt ${r.params.tilt_deg}°, for ${esc(job.hand_model)} hands</div>
+      <div>checks: palm gap ${(c.palm_gap_min_m * 100).toFixed(1)} cm, symmetry ${c.mirror_err_deg}°, joint limits ${c.in_joint_limits ? 'ok' : 'NO'}, peak ${c.peak_speed_rad_s} of ${c.speed_budget_rad_s} rad/s ${r.ok ? '✅' : '⚠ not safe to use'}</div>`;
+    if (r.compare) h += `<img src="/clips/source/${encodeURIComponent(r.compare)}?t=${job.id}" style="width:100%;margin-top:6px;border-radius:6px" alt="video vs robot">`;
+  } else if (r) {
+    h += `<div>measured: calm hand drift ${r.measured.calm_spread_sw} shoulder widths, ${r.measured.idle_freq_hz} Hz, ${r.measured.gestures_per_min} gestures/min</div>
+      <div>→ idle amplitude ×${r.idle_amp_scale}, speed ×${r.idle_speed_scale}, a gesture every ${r.beat_every} phrase(s)</div>`;
+  }
+  if (job.status === 'ready') h += `<div class="row" style="margin-top:6px">
+      <button onclick="decideVideo(true)" ${r && r.ok ? '' : 'disabled'}>Use this</button>
+      <button onclick="decideVideo(false)">Keep the old one</button></div>`;
+  if (job.status === 'installed') h += `<div class="row" style="margin-top:6px"><button onclick="restoreVideo('${job.kind}')">Undo (put the previous one back)</button></div>`;
+  $('vidJob').innerHTML = h + '</div>';
+}
+async function decideVideo(use) {
+  const j = await post('/api/video/decide', {use}, 'vidMsg');
+  if (j.ok) { showVideoJob(j.job); loadClips(); }
+}
+async function restoreVideo(kind) {
+  const j = await post('/api/video/restore', {kind}, 'vidMsg');
+  if (j.ok) { $('vidMsg').textContent = 'previous version restored (' + j.restored + ')'; loadClips(); }
+}
+async function initVideoCard() {
+  vidKindChanged();
+  const j = await (await fetch('/api/video/job')).json();
+  showVideoJob(j.job);
+  if (j.job && j.job.status === 'running') pollVideoJob();
+}
+
+// ---------- reference voice: reading script + recording in the browser (saved as WAV: the AI service has no webm decoder)
+const REC_SCRIPTS = [
+  {name: 'Greeting (recommended: what the robot says most)',
+   text: 'สวัสดีค่ะ ยินดีต้อนรับสู่ร้านของเรานะคะ วันนี้มีสินค้าใหม่มากมาย ถ้าต้องการความช่วยเหลือ สอบถามดิฉันได้เลยค่ะ'},
+  {name: 'Directions (many tones and vowels)',
+   text: 'ห้องน้ำอยู่ทางซ้ายมือ ส่วนคาเฟ่อยู่ด้านขวา เดินตรงไปประมาณยี่สิบเมตร แล้วจะเห็นป้ายสีเขียวค่ะ'},
+  {name: 'Shop information (numbers, longer words)',
+   text: 'ร้านเปิดทุกวันตั้งแต่สิบโมงเช้าถึงสองทุ่ม มีที่จอดรถฟรี และรับชำระเงินด้วยบัตรเครดิต หรือสแกนจ่ายผ่านมือถือได้ค่ะ'},
+  {name: 'My own text (type it in the transcript box)', text: ''}];
+const REC_MAX_S = 12, REC_MIN_S = 5;
+let recBlob = null, recState = null;
+function initRecScripts() {
+  if ($('recScript').options.length) return;
+  $('recScript').innerHTML = REC_SCRIPTS.map((x, i) => `<option value="${i}">${esc(x.name)}</option>`).join('');
+  pickScript();
+}
+function pickScript() {
+  const x = REC_SCRIPTS[+$('recScript').value];
+  $('recText').textContent = x.text || 'Type your own sentence in the transcript box below and read it exactly.';
+  if (x.text) $('vText').value = x.text;
+}
+async function toggleRecord() {
+  if (recState) { recState.stop(); return; }
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    $('vmsg').textContent = '⚠ this browser cannot record here (open the page as http://localhost:8100 on the laptop, or upload a file)';
+    return;
+  }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1}}); }
+  catch (e) { $('vmsg').textContent = '⚠ no microphone access: ' + e.message; return; }
+  const chunks = [], mr = new MediaRecorder(stream), t0 = performance.now();
+  mr.ondataavailable = e => chunks.push(e.data);
+  const tick = setInterval(() => {
+    const t = (performance.now() - t0) / 1000;
+    $('recTime').textContent = t.toFixed(1) + ' s' + (t < REC_MIN_S ? '' : ' ✓');
+    if (t >= REC_MAX_S) mr.stop();
+  }, 100);
+  mr.onstop = async () => {
+    clearInterval(tick); stream.getTracks().forEach(t => t.stop()); recState = null;
+    $('recBtn').textContent = '● Record';
+    try {
+      const ctx = new AudioContext();
+      const buf = await ctx.decodeAudioData(await new Blob(chunks).arrayBuffer());
+      ctx.close();
+      recBlob = wavFromBuffer(buf);
+      const secs = buf.duration;
+      $('recPlay').src = URL.createObjectURL(recBlob); $('recPlay').style.display = '';
+      $('recTime').textContent = `${secs.toFixed(1)} s recorded` + (secs < REC_MIN_S ? ' ⚠ too short (5–12 s)' : ' — listen, then Upload');
+      $('vFile').value = '';
+    } catch (e) { $('vmsg').textContent = '⚠ recording could not be read: ' + e.message; }
+  };
+  mr.start(); recState = mr; recBlob = null;
+  $('recBtn').textContent = '■ Stop'; $('recPlay').style.display = 'none'; $('vmsg').textContent = '';
+}
+function wavFromBuffer(buf) {  // mono 16-bit PCM WAV at the buffer's sample rate
+  const n = buf.length, sr = buf.sampleRate, ch = buf.numberOfChannels, x = new Float32Array(n);
+  for (let c = 0; c < ch; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) x[i] += d[i] / ch; }
+  const v = new DataView(new ArrayBuffer(44 + 2 * n));
+  const str = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); v.setUint32(4, 36 + 2 * n, true); str(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, 2 * sr, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, 2 * n, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + 2 * i, Math.max(-1, Math.min(1, x[i])) * 0x7fff, true);
+  return new Blob([v], {type: 'audio/wav'});
+}
+
+async function uploadVoice() {
+  const f = recBlob || $('vFile').files[0], name = $('vName').value.trim(), text = $('vText').value.trim();
+  if (!f || !name || !text) { $('vmsg').textContent = '⚠ name, recording (or file) and transcript needed'; return; }
+  if (!$('vConsent').checked) { $('vmsg').textContent = '⚠ the speaker must agree'; return; }
+  $('vmsg').textContent = 'uploading…';
+  const r = await fetch(`/api/voice/upload?name=${encodeURIComponent(name)}&text=${encodeURIComponent(text)}`, {method:'POST', body:f, headers:{'Content-Type': f.type || 'application/octet-stream'}});
+  const j = await r.json(); $('vmsg').textContent = j.ok ? `uploaded (${j.seconds} s of audio)` : '⚠ ' + j.reason;
+  if (j.ok) loadVoices();
+}
+
+// ---------- pointing
+let curBooth = null;
+async function loadPlans() {
+  const j = await (await fetch('/api/point/plans')).json();
+  if (!j.ok) return;
+  const side = p => p.side === 'left' ? 'L' : 'R';
+  $('pointBtns').innerHTML = j.plans.map(p => `<button data-b="${esc(p.booth)}" ${p.ok ? '' : 'disabled'}
+      title="${p.ok ? `torso ${p.torso_deg.toFixed(0)}°, elevation ${p.elev_deg.toFixed(0)}°, IK error ${p.azimuth_error_deg.toFixed(1)}°` : esc(p.reason)}"
+      onclick="pointTo('${esc(p.booth)}')">${esc(p.name_en || p.booth)}<small>${esc(p.name_th)}</small>
+      <small>${p.ok ? `${side(p)} ${p.azimuth_deg >= 0 ? '+' : ''}${p.azimuth_deg.toFixed(0)}° · ${p.distance_m.toFixed(1)} m` : 'cannot point'}</small></button>`).join('')
+    || '<span class="mute">no booths in the active shop</span>';
+  markCur();
+}
+function markCur() { document.querySelectorAll('#pointBtns button').forEach(b => b.classList.toggle('cur', b.dataset.b === curBooth)); }
+async function pointTo(id) {
+  const hold = $('holdOn').checked ? null : +$('holdS').value;
+  const j = await post('/api/point', {booth:id, hold_s:hold}, 'pmsg');
+  if (j.ok) { $('viewBooth').value = id; }
+}
+function showAction(a) {
+  if (!a || !a.name) { $('action').textContent = ''; return; }
+  const live = a.phase && !['done', 'stopped'].includes(a.phase);
+  $('action').innerHTML = `<b>${esc(a.name)}</b>${a.booth ? ' ' + esc(a.booth) + ` · arm ${a.side} · torso ${a.torso_deg}° · elevation ${a.elev_deg}°` : ''}
+    — <span class="${live ? 'warn' : 'mute'}">${esc(a.phase || '')}${a.t != null && live ? ` ${a.t.toFixed(1)}${a.duration ? ' / ' + a.duration.toFixed(1) : ''} s` : ''}</span>`;
+  const cb = live && a.booth ? a.booth : null;
+  if (cb !== curBooth) { curBooth = cb; markCur(); if (cb) $('viewBooth').value = cb; }
+}
+
+// 3D view: next frame only after the last one loaded (no request pile-up)
+let viewBusy = false;
+function nextView() {
+  if (viewBusy || !$('viewOn').checked || !$('operate').classList.contains('on') || document.hidden) return;
+  viewBusy = true;
+  $('view').src = `/api/view.jpg?cam=${$('cam').value}&booth=${encodeURIComponent($('viewBooth').value)}&t=${Date.now()}`;
+}
+$('view').onload = $('view').onerror = () => { viewBusy = false; };
+setInterval(nextView, 200);
+
+// ---------- shop editor
+const S = { shop:null, geo:{}, sel:null, tool:'select', dirty:false, img:null,
+            view:{x:15, y:15, z:20}, drag:null, cal:[] };
+const PALETTE = ['#9ecae1','#fdd0a2','#a1d99b','#bcbddc','#fc9272','#c7e9c0','#fdae6b','#9e9ac8','#6baed6','#f768a1','#d9b38c'];
+const cv = $('map'), cx = cv.getContext('2d');
+function resize() { const r = cv.getBoundingClientRect(); const k = devicePixelRatio || 1;
+  cv.width = Math.max(1, r.width * k); cv.height = Math.max(1, r.height * k); cx.setTransform(k, 0, 0, k, 0, 0); draw(); }
+window.addEventListener('resize', () => { if ($('shop').classList.contains('on')) resize(); });
+const W = () => cv.width / (devicePixelRatio || 1), H = () => cv.height / (devicePixelRatio || 1);
+const toS = (x, y) => [(x - S.view.x) * S.view.z + W() / 2, H() / 2 - (y - S.view.y) * S.view.z];
+const toW = (sx, sy) => [(sx - W() / 2) / S.view.z + S.view.x, (H() / 2 - sy) / S.view.z + S.view.y];
+
+async function refreshShopList(selectName) {
+  const j = await (await fetch('/api/shops')).json();
+  $('shopSel').innerHTML = j.shops.map(n => `<option>${esc(n)}</option>`).join('');
+  $('shopSel').value = selectName || S.shop?.name || j.active || j.shops[0];
+  return j;
+}
+async function loadShop(name) {
+  if (S.dirty && !confirm('Discard unsaved changes?')) return;
+  const lst = await refreshShopList(name);
+  name = name || lst.active || lst.shops[0];
+  if (!name) return;
+  const j = await (await fetch('/api/shop?name=' + encodeURIComponent(name))).json();
+  if (!j.ok) { $('smsg').textContent = '⚠ ' + j.reason; return; }
+  S.shop = j.shop; S.sel = null; setDirty(false); $('shopSel').value = name;
+  loadImage(); fillForm(); fitView();
+}
+function loadImage() {
+  S.img = null;
+  const bg = S.shop.background;
+  if (!bg) return draw();
+  const im = new Image();
+  im.onload = () => { S.img = im; draw(); };
+  im.src = `/shops/${encodeURIComponent(S.shop.name)}/${encodeURIComponent(bg.image)}`;
+}
+function setDirty(d) { S.dirty = d; $('dirty').textContent = d ? '● unsaved changes' : 'saved'; $('dirty').className = d ? 'warn' : 'mute'; }
+function changed() { setDirty(true); geoAll(); fillForm(); draw(); }
+
+// geometry the robot sees (same formulas as the server's booth_geometry)
+function geo(b) {
+  const r = S.shop.robot, yaw = r.yaw_deg * D2R, dx = b.aim.x - r.x, dy = b.aim.y - r.y;
+  const f = dx * Math.cos(yaw) + dy * Math.sin(yaw), l = -dx * Math.sin(yaw) + dy * Math.cos(yaw);
+  const az = Math.atan2(l, f) / D2R, st = S.shop.settings || {torso_k:0.25, torso_max_deg:15};
+  const torso = Math.max(-st.torso_max_deg, Math.min(st.torso_max_deg, st.torso_k * az));
+  return {az, dist:Math.hypot(dx, dy), torso, ok:Math.abs(az) <= 110};
+}
+function geoAll() { S.geo = {}; for (const b of S.shop.booths) S.geo[b.id] = geo(b); }
+function rectCorners(rc) { const a = (rc.angle_deg || 0) * D2R, c = Math.cos(a), s = Math.sin(a);
+  return [[0,0],[rc.w,0],[rc.w,rc.h],[0,rc.h]].map(([u,v]) => [rc.x + u*c - v*s, rc.y + u*s + v*c]); }
+function inRect(rc, x, y) { const a = -(rc.angle_deg || 0) * D2R, dx = x - rc.x, dy = y - rc.y;
+  const u = dx*Math.cos(a) - dy*Math.sin(a), v = dx*Math.sin(a) + dy*Math.cos(a); return u >= 0 && v >= 0 && u <= rc.w && v <= rc.h; }
+
+function fitView() {
+  if (!S.shop) return;
+  let xs = [S.shop.robot.x], ys = [S.shop.robot.y];
+  const bg = S.shop.background;
+  if (bg) { const [ox, oy] = bg.origin_bottom_left_m, r = bg.resolution_m_per_px; xs.push(ox, ox + bg.size_px[0]*r); ys.push(oy, oy + bg.size_px[1]*r); }
+  for (const b of S.shop.booths) for (const [x, y] of rectCorners(b.rect)) { xs.push(x); ys.push(y); }
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  S.view.x = (x0 + x1) / 2; S.view.y = (y0 + y1) / 2;
+  S.view.z = Math.min(W() / Math.max(1, x1 - x0 + 2), H() / Math.max(1, y1 - y0 + 2)) * 0.95;
+  draw();
+}
+
+function draw() {
+  if (!S.shop || !cv.width) return;
+  const w = W(), h = H();
+  cx.clearRect(0, 0, w, h); cx.fillStyle = '#e5e7eb'; cx.fillRect(0, 0, w, h);
+  const bg = S.shop.background;
+  if (S.img && bg) {
+    const r = bg.resolution_m_per_px, [ox, oy] = bg.origin_bottom_left_m;
+    const [sx, sy] = toS(ox, oy + bg.size_px[1] * r);
+    cx.globalAlpha = 0.9; cx.drawImage(S.img, sx, sy, bg.size_px[0] * r * S.view.z, bg.size_px[1] * r * S.view.z); cx.globalAlpha = 1;
+  }
+  // 1 m / 5 m grid and axes
+  const [wx0, wy1] = toW(0, 0), [wx1, wy0] = toW(w, h), step = S.view.z > 25 ? 1 : 5;
+  cx.lineWidth = 1;
+  for (let x = Math.floor(wx0 / step) * step; x <= wx1; x += step) { const [sx] = toS(x, 0); cx.strokeStyle = x === 0 ? '#ef444488' : '#0000000f'; cx.beginPath(); cx.moveTo(sx, 0); cx.lineTo(sx, h); cx.stroke(); }
+  for (let y = Math.floor(wy0 / step) * step; y <= wy1; y += step) { const [, sy] = toS(0, y); cx.strokeStyle = y === 0 ? '#22c55e88' : '#0000000f'; cx.beginPath(); cx.moveTo(0, sy); cx.lineTo(w, sy); cx.stroke(); }
+  // pointing sector + torso-turn sector of the robot
+  const r = S.shop.robot, [rsx, rsy] = toS(r.x, r.y), yaw = r.yaw_deg * D2R;
+  cx.fillStyle = '#facc1522'; cx.beginPath(); cx.moveTo(rsx, rsy); cx.arc(rsx, rsy, 8 * S.view.z, -yaw - 110 * D2R, -yaw + 110 * D2R); cx.closePath(); cx.fill();
+  // booths
+  for (const b of S.shop.booths) {
+    const pts = rectCorners(b.rect).map(([x, y]) => toS(x, y)), sel = b.id === S.sel;
+    cx.beginPath(); pts.forEach(([x, y], i) => i ? cx.lineTo(x, y) : cx.moveTo(x, y)); cx.closePath();
+    cx.fillStyle = b.color + (sel ? 'cc' : '99'); cx.fill();
+    cx.lineWidth = sel ? 3 : 1; cx.strokeStyle = sel ? '#f59e0b' : '#374151'; cx.stroke();
+    const g = S.geo[b.id], [ax, ay] = toS(b.aim.x, b.aim.y);
+    if (sel) { cx.setLineDash([6, 4]); cx.strokeStyle = g && g.ok ? '#dc2626' : '#9ca3af'; cx.lineWidth = 2;
+      cx.beginPath(); cx.moveTo(rsx, rsy); cx.lineTo(ax, ay); cx.stroke(); cx.setLineDash([]); }
+    cx.fillStyle = g && !g.ok ? '#9ca3af' : '#dc2626'; cx.beginPath(); cx.arc(ax, ay, sel ? 6 : 4, 0, 7); cx.fill();
+    if (sel) { const [hx, hy] = pts[2]; cx.fillStyle = '#f59e0b'; cx.fillRect(hx - 5, hy - 5, 10, 10); }
+    const c = pts.reduce((a, p) => [a[0] + p[0] / 4, a[1] + p[1] / 4], [0, 0]);
+    cx.fillStyle = '#111827'; cx.font = '600 12px system-ui, "Noto Sans Thai", Loma, sans-serif'; cx.textAlign = 'center';
+    cx.fillText(b.name_th || b.id, c[0], c[1] - 3); cx.font = '11px system-ui, sans-serif'; cx.fillStyle = '#374151';
+    cx.fillText((b.name_en || '') + (g && !g.ok ? ' (behind robot)' : ''), c[0], c[1] + 11);
+  }
+  // robot
+  cx.save(); cx.translate(rsx, rsy); cx.rotate(-yaw);
+  cx.fillStyle = '#dc2626'; cx.beginPath(); cx.moveTo(16, 0); cx.lineTo(-9, 9); cx.lineTo(-5, 0); cx.lineTo(-9, -9); cx.closePath(); cx.fill();
+  cx.restore(); cx.fillStyle = '#7f1d1d'; cx.font = '700 12px system-ui'; cx.textAlign = 'left'; cx.fillText('G1', rsx + 12, rsy - 10);
+  // calibration points
+  cx.fillStyle = '#7c3aed'; for (const [x, y] of S.cal) { const [sx, sy] = toS(x, y); cx.beginPath(); cx.arc(sx, sy, 5, 0, 7); cx.fill(); }
+  // scale bar
+  const m = S.view.z > 25 ? 1 : 5; cx.fillStyle = '#111827'; cx.fillRect(w - 20 - m * S.view.z, h - 50, m * S.view.z, 4);
+  cx.font = '12px system-ui'; cx.textAlign = 'right'; cx.fillText(`${m} m`, w - 20, h - 56);
+}
+
+const HINTS = { select:'Drag a booth, its aim point (red dot), its corner handle or the robot. Drag empty space to pan, wheel to zoom.',
+  booth:'Drag a rectangle to add a booth.', robot:'Click to place the robot; drag to set where it faces (into the shop).',
+  aim:'Click where the robot should point for the selected booth.', scale:'Click two points whose real distance you know.',
+  origin:'Click the point that should become (0, 0).' };
+function setTool(t) { S.tool = t; S.cal = []; document.querySelectorAll('#tools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  $('hint').textContent = HINTS[t]; draw(); }
+document.querySelectorAll('#tools [data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+setTool('select');
+
+function hit(x, y) {
+  const tol = 8 / S.view.z, r = S.shop.robot;
+  if (S.sel) { const b = S.shop.booths.find(b => b.id === S.sel);
+    if (b) { if (Math.hypot(b.aim.x - x, b.aim.y - y) < tol) return {kind:'aim', b};
+      const [hx, hy] = rectCorners(b.rect)[2]; if (Math.hypot(hx - x, hy - y) < tol) return {kind:'size', b}; } }
+  if (Math.hypot(r.x - x, r.y - y) < 14 / S.view.z) return {kind:'robot'};
+  for (const b of [...S.shop.booths].reverse()) { if (Math.hypot(b.aim.x - x, b.aim.y - y) < tol) return {kind:'aim', b}; if (inRect(b.rect, x, y)) return {kind:'booth', b}; }
+  return null;
+}
+cv.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = toW(e.offsetX, e.offsetY);
+  S.view.z = Math.min(400, Math.max(1, S.view.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+  const [x2, y2] = toW(e.offsetX, e.offsetY); S.view.x += x - x2; S.view.y += y - y2; draw(); }, {passive:false});
+cv.addEventListener('pointerdown', e => {
+  if (!S.shop) return; cv.setPointerCapture(e.pointerId);
+  const [x, y] = toW(e.offsetX, e.offsetY);
+  if (e.button === 1 || e.button === 2) { S.drag = {kind:'pan', sx:e.offsetX, sy:e.offsetY, vx:S.view.x, vy:S.view.y}; return; }
+  if (S.tool === 'select') {
+    const h = hit(x, y);
+    if (!h) { S.drag = {kind:'pan', sx:e.offsetX, sy:e.offsetY, vx:S.view.x, vy:S.view.y}; return; }
+    if (h.b) { S.sel = h.b.id; fillForm(); }
+    S.drag = {...h, x0:x, y0:y, rect:h.b ? {...h.b.rect} : null, aim:h.b ? {...h.b.aim} : null, robot:{...S.shop.robot}};
+    draw();
+  } else if (S.tool === 'booth') S.drag = {kind:'new', x0:x, y0:y, x, y};
+  else if (S.tool === 'robot') { S.shop.robot.x = +x.toFixed(2); S.shop.robot.y = +y.toFixed(2); S.drag = {kind:'heading'}; changed(); }
+  else if (S.tool === 'aim') { const b = S.shop.booths.find(b => b.id === S.sel); if (!b) { $('hint').textContent = 'Select a booth first.'; return; }
+    b.aim.x = +x.toFixed(2); b.aim.y = +y.toFixed(2); changed(); }
+  else if (S.tool === 'scale') { S.cal.push([x, y]); draw(); if (S.cal.length === 2) setTimeout(applyScale, 30); }
+  else if (S.tool === 'origin') applyOrigin(x, y);
+});
+cv.addEventListener('pointermove', e => {
+  const d = S.drag; if (!d) return; const [x, y] = toW(e.offsetX, e.offsetY);
+  if (d.kind === 'pan') { S.view.x = d.vx - (e.offsetX - d.sx) / S.view.z; S.view.y = d.vy + (e.offsetY - d.sy) / S.view.z; return draw(); }
+  const dx = x - d.x0, dy = y - d.y0;
+  if (d.kind === 'booth') { d.b.rect.x = +(d.rect.x + dx).toFixed(2); d.b.rect.y = +(d.rect.y + dy).toFixed(2);
+    d.b.aim.x = +(d.aim.x + dx).toFixed(2); d.b.aim.y = +(d.aim.y + dy).toFixed(2); changed(); }
+  else if (d.kind === 'aim') { d.b.aim.x = +x.toFixed(2); d.b.aim.y = +y.toFixed(2); changed(); }
+  else if (d.kind === 'size') { const a = -(d.rect.angle_deg || 0) * D2R, ux = x - d.rect.x, uy = y - d.rect.y;
+    d.b.rect.w = +Math.max(0.2, ux*Math.cos(a) - uy*Math.sin(a)).toFixed(2); d.b.rect.h = +Math.max(0.2, ux*Math.sin(a) + uy*Math.cos(a)).toFixed(2); changed(); }
+  else if (d.kind === 'robot') { S.shop.robot.x = +(d.robot.x + dx).toFixed(2); S.shop.robot.y = +(d.robot.y + dy).toFixed(2); changed(); }
+  else if (d.kind === 'heading') { const r = S.shop.robot; if (Math.hypot(x - r.x, y - r.y) > 0.3) { r.yaw_deg = +(Math.atan2(y - r.y, x - r.x) / D2R).toFixed(1); changed(); } }
+  else if (d.kind === 'new') { d.x = x; d.y = y; draw();
+    const [a, b] = toS(Math.min(d.x0, x), Math.max(d.y0, y)); cx.strokeStyle = '#2563eb'; cx.lineWidth = 2;
+    cx.strokeRect(a, b, Math.abs(x - d.x0) * S.view.z, Math.abs(y - d.y0) * S.view.z); }
+});
+cv.addEventListener('pointerup', () => {
+  const d = S.drag; S.drag = null;
+  if (d && d.kind === 'new') {
+    const w = Math.abs(d.x - d.x0), h = Math.abs(d.y - d.y0);
+    if (w < 0.2 || h < 0.2) return draw();
+    let n = S.shop.booths.length + 1; while (S.shop.booths.some(b => b.id === 'booth' + n)) n++;
+    const x = Math.min(d.x0, d.x), y = Math.min(d.y0, d.y);
+    S.shop.booths.push({id:'booth' + n, name_th:'', name_en:'Booth ' + n, rect:{x:+x.toFixed(2), y:+y.toFixed(2), w:+w.toFixed(2), h:+h.toFixed(2), angle_deg:0},
+      aim:{x:+(x + w/2).toFixed(2), y:+(y + h/2).toFixed(2), z:1.0}, description_th:'', description_en:'', labels:[], color:PALETTE[n % PALETTE.length]});
+    S.sel = 'booth' + n; setTool('select'); changed(); $('b_name_en').focus();
+  }
+});
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+function allPoints(fn) { // robot, booth corners and aim points move with the map
+  const r = S.shop.robot; [r.x, r.y] = fn(r.x, r.y);
+  for (const b of S.shop.booths) { [b.rect.x, b.rect.y] = fn(b.rect.x, b.rect.y); [b.aim.x, b.aim.y] = fn(b.aim.x, b.aim.y); }
+}
+function applyScale() {
+  const [[x1, y1], [x2, y2]] = S.cal, d = Math.hypot(x2 - x1, y2 - y1);
+  const real = parseFloat(prompt(`Real distance between the two points (m)? (now ${d.toFixed(2)} m)`, d.toFixed(2)));
+  S.cal = []; setTool('select');
+  if (!(real > 0) || !S.shop.background) { if (!S.shop.background) $('smsg').textContent = '⚠ upload a background map first'; return draw(); }
+  const k = real / d, bg = S.shop.background;
+  // scale the map about point 1 (it keeps its world position)
+  bg.resolution_m_per_px = +(bg.resolution_m_per_px * k).toPrecision(6);
+  bg.origin_bottom_left_m = [x1 + (bg.origin_bottom_left_m[0] - x1) * k, y1 + (bg.origin_bottom_left_m[1] - y1) * k];
+  if ($('moveWithMap').checked) { allPoints((x, y) => [+(x1 + (x - x1) * k).toFixed(3), +(y1 + (y - y1) * k).toFixed(3)]);
+    for (const b of S.shop.booths) { b.rect.w = +(b.rect.w * k).toFixed(3); b.rect.h = +(b.rect.h * k).toFixed(3); } }
+  changed(); fitView();
+}
+function applyOrigin(x, y) {
+  if (S.shop.background) { const o = S.shop.background.origin_bottom_left_m; S.shop.background.origin_bottom_left_m = [+(o[0] - x).toFixed(4), +(o[1] - y).toFixed(4)]; }
+  if ($('moveWithMap').checked) allPoints((px, py) => [+(px - x).toFixed(3), +(py - y).toFixed(3)]);
+  setTool('select'); S.view.x -= x; S.view.y -= y; changed();
+}
+
+// ---------- side panel
+function fillForm() {
+  const s = S.shop; if (!s) return;
+  const bg = s.background, act = document.activeElement;
+  const set = (id, v) => { if ($(id) !== act) $(id).value = v; };
+  set('res', bg ? bg.resolution_m_per_px : ''); set('ox', bg ? bg.origin_bottom_left_m[0] : ''); set('oy', bg ? bg.origin_bottom_left_m[1] : '');
+  $('bgInfo').textContent = bg ? `${bg.size_px[0]}×${bg.size_px[1]} px = ${(bg.size_px[0]*bg.resolution_m_per_px).toFixed(1)}×${(bg.size_px[1]*bg.resolution_m_per_px).toFixed(1)} m` : 'no map';
+  set('rx', s.robot.x); set('ry', s.robot.y); set('ryaw', s.robot.yaw_deg);
+  s.settings = s.settings || {torso_k:0.25, torso_max_deg:15}; set('tk', s.settings.torso_k); set('tmax', s.settings.torso_max_deg);
+  if (!Object.keys(S.geo).length) geoAll();
+  $('nb').textContent = `(${s.booths.length})`;
+  $('blist').innerHTML = s.booths.map(b => { const g = S.geo[b.id];
+    return `<div class="${b.id === S.sel ? 'sel' : ''}" data-id="${esc(b.id)}"><span class="sw" style="background:${b.color}"></span>
+      <span style="flex:1">${esc(b.name_th || b.id)} <span class="mute">${esc(b.name_en)}</span></span>
+      <span class="mute ${g && !g.ok ? 'bad' : ''}">${g ? g.az.toFixed(0) + '° ' + g.dist.toFixed(1) + ' m' : ''}</span></div>`; }).join('');
+  $('blist').querySelectorAll('div').forEach(d => d.onclick = () => { S.sel = d.dataset.id; fillForm(); draw(); });
+  const b = s.booths.find(b => b.id === S.sel);
+  $('bedit').style.display = b ? '' : 'none';
+  if (!b) return;
+  set('b_id', b.id); set('b_name_th', b.name_th); set('b_name_en', b.name_en); set('b_x', b.rect.x); set('b_y', b.rect.y);
+  set('b_w', b.rect.w); set('b_h', b.rect.h); set('b_a', b.rect.angle_deg || 0); set('b_ax', b.aim.x); set('b_ay', b.aim.y);
+  set('b_az', b.aim.z); set('b_color', b.color); set('b_dth', b.description_th); set('b_den', b.description_en); set('b_labels', (b.labels || []).join(', '));
+  const g = S.geo[b.id];
+  $('bgeo').innerHTML = g ? `<span>seen from the robot: <b>${g.az >= 0 ? 'left' : 'right'} ${Math.abs(g.az).toFixed(0)}°</b>, ${g.dist.toFixed(1)} m;
+    torso turns ${g.torso.toFixed(1)}°, arm ${g.az > 5 ? 'left' : g.az < -5 ? 'right' : 'right (straight ahead)'}</span>` + (g.ok ? '' : ' <span class="bad">behind the robot: cannot point</span>') : '';
+}
+const num = id => parseFloat($(id).value);
+function bind(id, fn) { $(id).addEventListener('input', () => { if (!S.shop) return; try { fn(); changed(); } catch (e) {} }); }
+bind('res', () => { if (S.shop.background && num('res') > 0) S.shop.background.resolution_m_per_px = num('res'); });
+bind('ox', () => { if (S.shop.background && isFinite(num('ox'))) S.shop.background.origin_bottom_left_m[0] = num('ox'); });
+bind('oy', () => { if (S.shop.background && isFinite(num('oy'))) S.shop.background.origin_bottom_left_m[1] = num('oy'); });
+bind('rx', () => { if (isFinite(num('rx'))) S.shop.robot.x = num('rx'); });
+bind('ry', () => { if (isFinite(num('ry'))) S.shop.robot.y = num('ry'); });
+bind('ryaw', () => { if (isFinite(num('ryaw'))) S.shop.robot.yaw_deg = num('ryaw'); });
+bind('tk', () => { if (isFinite(num('tk'))) S.shop.settings.torso_k = num('tk'); });
+bind('tmax', () => { if (isFinite(num('tmax'))) S.shop.settings.torso_max_deg = num('tmax'); });
+const selB = () => S.shop.booths.find(b => b.id === S.sel);
+bind('b_id', () => { const b = selB(), v = $('b_id').value.trim(); if (b && /^[A-Za-z0-9_-]{1,40}$/.test(v) && !S.shop.booths.some(o => o !== b && o.id === v)) { b.id = v; S.sel = v; } });
+bind('b_name_th', () => selB().name_th = $('b_name_th').value);
+bind('b_name_en', () => selB().name_en = $('b_name_en').value);
+for (const [id, k] of [['b_x','x'],['b_y','y'],['b_w','w'],['b_h','h'],['b_a','angle_deg']]) bind(id, () => { if (isFinite(num(id))) selB().rect[k] = num(id); });
+for (const [id, k] of [['b_ax','x'],['b_ay','y'],['b_az','z']]) bind(id, () => { if (isFinite(num(id))) selB().aim[k] = num(id); });
+bind('b_color', () => selB().color = $('b_color').value);
+bind('b_dth', () => selB().description_th = $('b_dth').value);
+bind('b_den', () => selB().description_en = $('b_den').value);
+bind('b_labels', () => selB().labels = $('b_labels').value.split(',').map(s => s.trim()).filter(Boolean));
+function centreAim() { const b = selB(), c = rectCorners(b.rect); b.aim.x = +((c[0][0] + c[2][0]) / 2).toFixed(2); b.aim.y = +((c[0][1] + c[2][1]) / 2).toFixed(2); changed(); }
+function delBooth() { const b = selB(); if (!b || !confirm(`Delete booth ${b.name_en || b.id}?`)) return;
+  S.shop.booths = S.shop.booths.filter(x => x !== b); S.sel = null; changed(); }
+
+async function saveShop() {
+  const j = await post('/api/shop/save', {shop:S.shop}, 'smsg');
+  if (j.ok) { S.shop = j.shop; setDirty(false); geoAll(); fillForm(); draw(); $('smsg').textContent = '✓ saved'; if (S.shop.name === activeName) loadViewBooths(); }
+}
+async function newShop(copy) {
+  const name = prompt(copy ? `Copy "${S.shop?.name}" as (letters, digits, - _):` : 'New shop name (letters, digits, - _):');
+  if (!name) return;
+  const j = await post('/api/shop/new', {name, copy_from: copy ? S.shop?.name : null}, 'smsg');
+  if (j.ok) { S.dirty = false; loadShop(name); }
+}
+async function makeActive() {
+  if (S.dirty) { $('smsg').textContent = '⚠ save first'; return; }
+  const j = await post('/api/shop/active', {name:S.shop.name}, 'smsg'); if (j.ok) $('smsg').textContent = `✓ the robot now uses "${S.shop.name}"`;
+}
+async function uploadBg() {
+  const f = $('bgFile').files[0]; if (!f) { $('smsg').textContent = '⚠ choose an image file'; return; }
+  if (S.dirty && !confirm('Uploading saves the map; unsaved booth/robot changes are lost. Continue?')) return;
+  $('smsg').textContent = 'uploading…';
+  const r = await fetch('/api/shop/background?name=' + encodeURIComponent(S.shop.name), {method:'POST', headers:{'Content-Type':f.type}, body:f});
+  const j = await r.json();
+  if (!j.ok) { $('smsg').textContent = '⚠ ' + j.reason; return; }
+  S.shop = j.shop; setDirty(false); loadImage(); geoAll(); fillForm(); fitView();
+  $('smsg').textContent = '✓ uploaded. Now set the scale (Scale tool: click two points of known distance) and the origin.';
+}
+{ const t = document.querySelector(`.tab[data-page="${location.hash.slice(1)}"]`); if (t) t.click(); }  // #shop, #scripts
+window.addEventListener('beforeunload', e => { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
+document.addEventListener('keydown', e => {
+  if (!$('shop').classList.contains('on') || ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  if (e.key === 'Delete' && S.sel) delBooth(); else if (e.key === 'Escape') setTool('select');
+  else if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveShop(); }
+});
+</script>
+</body>
+</html>

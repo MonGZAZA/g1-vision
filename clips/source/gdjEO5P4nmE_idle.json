@@ -1,0 +1,18 @@
+{
+ "source": "videos/examples/gdjEO5P4nmE.mp4",
+ "segment_s": [
+  4.3,
+  139.3
+ ],
+ "made": "2026-11-10 08:34",
+ "frames_used": 1620,
+ "measured": {
+  "calm_spread_sw": 0.1802,
+  "idle_freq_hz": 0.178,
+  "gestures_per_min": 24.9
+ },
+ "idle_amp_scale": 1.6,
+ "idle_speed_scale": 1.18,
+ "beat_every": 1,
+ "enabled": true
+}

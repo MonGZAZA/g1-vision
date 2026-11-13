@@ -1,0 +1,14 @@
+[project]
+name = "exp05-vision"
+version = "0.1.0"
+description = "exp05 vision: people detection (camera), facing, walking speed, distance from the head lidar"
+requires-python = "==3.10.*"
+dependencies = [
+    "mediapipe==0.10.21",   # pose landmarker (multi-person), Apache-2.0
+    "numpy<2",
+    "mujoco>=3.2",          # robot model: lidar/camera pose from the joint angles, self-filter; sim people
+    "pillow",
+]
+
+[tool.uv]
+package = false

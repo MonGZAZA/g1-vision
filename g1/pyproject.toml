@@ -1,0 +1,20 @@
+[project]
+name = "exp05-g1"
+version = "0.1.0"
+description = "exp05: G1 shop greeter (upper-body interaction: wai, keep-alive, pointing; voice + captions)"
+requires-python = "==3.10.*"   # cyclonedds 0.10.2 (pinned by unitree_sdk2py) has wheels only up to cp310
+dependencies = [
+    "unitree_sdk2py",
+    "cyclonedds==0.10.2",
+    "mujoco>=3.2",
+    "numpy<2",
+    "pyyaml",
+    "pillow",         # background-map upload (size, format), check renders
+    "onnxruntime>=1.20",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+unitree_sdk2py = { path = "third_party/unitree_sdk2_python", editable = true }

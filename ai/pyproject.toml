@@ -1,0 +1,34 @@
+[project]
+name = "exp05-ai"
+version = "0.1.0"
+description = "exp05 AI service: Thai/English TTS, local LLM for Q&A, video -> robot clip tools (MediaPipe)"
+requires-python = "==3.10.*"
+dependencies = [
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "transformers>=4.51,<4.56",  # Qwen3 (Typhoon 2.5)
+    "accelerate",
+    "bitsandbytes",
+    "kokoro>=0.9.4",
+    "soundfile",
+    "scipy",
+    "numpy<2",
+    "pythainlp",
+    "mediapipe==0.10.21",
+    "opencv-python-headless",
+    "f5-tts-th==1.0.9",  # voice cloning (F5-TTS-THAI, VIZINTZOR) for uploaded reference voices
+    "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",  # kokoro (misaki) English G2P
+    "yt-dlp>=2026.10.21",
+]
+
+[tool.uv]
+package = false
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchaudio = { index = "pytorch-cu124" }

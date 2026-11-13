@@ -1,0 +1,374 @@
+{
+  "format": "exp05-shop",
+  "version": 1,
+  "name": "mockup",
+  "note": "Mockup shop for exp05 until the real shop is uploaded. Units: metres, degrees.",
+  "frame": "x right/east, y into the shop/north, origin = inside corner of the south-west wall; yaw 0 = +x, 90 = +y (counter-clockwise)",
+  "background": {
+    "image": "map.png",
+    "resolution_m_per_px": 0.04,
+    "size_px": [
+      950,
+      825
+    ],
+    "origin_bottom_left_m": [
+      -1.0,
+      -2.0
+    ]
+  },
+  "shop_size_m": [
+    36.0,
+    30.0
+  ],
+  "robot": {
+    "x": 18.0,
+    "y": 1.2,
+    "yaw_deg": 90.0
+  },
+  "booths": [
+    {
+      "id": "info",
+      "name_th": "จุดบริการข้อมูล",
+      "name_en": "Information",
+      "rect": {
+        "x": 22.0,
+        "y": 2.5,
+        "w": 3.0,
+        "h": 2.0,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 23.5,
+        "y": 3.5,
+        "z": 1.0
+      },
+      "description_th": "สอบถามข้อมูลสินค้าและโปรโมชั่น",
+      "description_en": "Product and promotion information",
+      "labels": [
+        "ประชาสัมพันธ์",
+        "สอบถาม",
+        "help desk",
+        "information desk"
+      ],
+      "color": "#9ecae1"
+    },
+    {
+      "id": "cashier",
+      "name_th": "แคชเชียร์",
+      "name_en": "Cashier",
+      "rect": {
+        "x": 8.5,
+        "y": 2.5,
+        "w": 5.0,
+        "h": 2.0,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 11.0,
+        "y": 3.5,
+        "z": 1.0
+      },
+      "description_th": "ชำระเงิน รับเงินสด บัตร และ QR",
+      "description_en": "Payment: cash, card and QR",
+      "labels": [
+        "จ่ายเงิน",
+        "ชำระเงิน",
+        "แคชเชียร์",
+        "pay",
+        "checkout"
+      ],
+      "color": "#fdd0a2"
+    },
+    {
+      "id": "cafe",
+      "name_th": "คาเฟ่",
+      "name_en": "Cafe",
+      "rect": {
+        "x": 29.0,
+        "y": 2.0,
+        "w": 6.0,
+        "h": 5.0,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 32.0,
+        "y": 4.5,
+        "z": 1.0
+      },
+      "description_th": "กาแฟ เครื่องดื่ม และขนม",
+      "description_en": "Coffee, drinks and snacks",
+      "labels": [
+        "กาแฟ",
+        "ร้านกาแฟ",
+        "เครื่องดื่ม",
+        "coffee",
+        "drink"
+      ],
+      "color": "#d9b38c"
+    },
+    {
+      "id": "restroom",
+      "name_th": "ห้องน้ำ",
+      "name_en": "Restrooms",
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 4.0,
+        "h": 4.5,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 2.0,
+        "y": 2.25,
+        "z": 1.0
+      },
+      "description_th": "ห้องน้ำชายและหญิง",
+      "description_en": "Men's and women's restrooms",
+      "labels": [
+        "ห้องน้ำ",
+        "สุขา",
+        "toilet",
+        "restroom",
+        "bathroom"
+      ],
+      "color": "#d9d9d9"
+    },
+    {
+      "id": "new",
+      "name_th": "สินค้ามาใหม่",
+      "name_en": "New Arrivals",
+      "rect": {
+        "x": 15.2,
+        "y": 3.2,
+        "w": 1.8,
+        "h": 1.1,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 16.1,
+        "y": 3.75,
+        "z": 1.0
+      },
+      "description_th": "โต๊ะสินค้าใหม่และโปรโมชั่นประจำสัปดาห์",
+      "description_en": "New products and this week's promotions",
+      "labels": [
+        "สินค้าใหม่",
+        "ของใหม่",
+        "new product"
+      ],
+      "color": "#f768a1"
+    },
+    {
+      "id": "phones",
+      "name_th": "โทรศัพท์และแท็บเล็ต",
+      "name_en": "Phones & Tablets",
+      "rect": {
+        "x": 4.0,
+        "y": 8.0,
+        "w": 7.0,
+        "h": 4.0,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 7.5,
+        "y": 10.0,
+        "z": 1.0
+      },
+      "description_th": "สมาร์ทโฟน แท็บเล็ต และอุปกรณ์เสริม",
+      "description_en": "Smartphones, tablets and accessories",
+      "labels": [
+        "โทรศัพท์",
+        "มือถือ",
+        "แท็บเล็ต",
+        "phone",
+        "tablet",
+        "iphone",
+        "smartphone"
+      ],
+      "color": "#a1d99b"
+    },
+    {
+      "id": "computers",
+      "name_th": "คอมพิวเตอร์",
+      "name_en": "Computers",
+      "rect": {
+        "x": 25.0,
+        "y": 8.0,
+        "w": 7.0,
+        "h": 4.0,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 28.5,
+        "y": 10.0,
+        "z": 1.0
+      },
+      "description_th": "โน้ตบุ๊ก คอมพิวเตอร์ตั้งโต๊ะ และจอ",
+      "description_en": "Laptops, desktops and monitors",
+      "labels": [
+        "คอม",
+        "โน้ตบุ๊ก",
+        "แล็ปท็อป",
+        "laptop",
+        "notebook",
+        "computer",
+        "pc"
+      ],
+      "color": "#bcbddc"
+    },
+    {
+      "id": "robots",
+      "name_th": "โชว์รูมหุ่นยนต์",
+      "name_en": "Robot Showroom",
+      "rect": {
+        "x": 14.5,
+        "y": 14.0,
+        "w": 7.0,
+        "h": 5.0,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 18.0,
+        "y": 16.5,
+        "z": 1.0
+      },
+      "description_th": "หุ่นยนต์บริการและหุ่นยนต์การศึกษา",
+      "description_en": "Service and education robots",
+      "labels": [
+        "หุ่นยนต์",
+        "robot"
+      ],
+      "color": "#fc9272"
+    },
+    {
+      "id": "smarthome",
+      "name_th": "บ้านอัจฉริยะ",
+      "name_en": "Smart Home",
+      "rect": {
+        "x": 2.0,
+        "y": 19.5,
+        "w": 7.0,
+        "h": 5.0,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 5.5,
+        "y": 22.0,
+        "z": 1.0
+      },
+      "description_th": "อุปกรณ์บ้านอัจฉริยะและกล้องวงจรปิด",
+      "description_en": "Smart home devices and cameras",
+      "labels": [
+        "สมาร์ทโฮม",
+        "บ้านอัจฉริยะ",
+        "smart home",
+        "iot"
+      ],
+      "color": "#c7e9c0"
+    },
+    {
+      "id": "audio",
+      "name_th": "เครื่องเสียง",
+      "name_en": "Audio",
+      "rect": {
+        "x": 28.0,
+        "y": 18.5,
+        "w": 6.0,
+        "h": 5.0,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 31.0,
+        "y": 21.0,
+        "z": 1.0
+      },
+      "description_th": "หูฟัง ลำโพง และเครื่องเสียง",
+      "description_en": "Headphones, speakers and audio",
+      "labels": [
+        "หูฟัง",
+        "ลำโพง",
+        "เครื่องเสียง",
+        "headphone",
+        "speaker",
+        "earbuds"
+      ],
+      "color": "#fdae6b"
+    },
+    {
+      "id": "gaming",
+      "name_th": "โซนเกม",
+      "name_en": "Gaming Zone",
+      "rect": {
+        "x": 8.0,
+        "y": 25.5,
+        "w": 8.0,
+        "h": 3.5,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 12.0,
+        "y": 27.25,
+        "z": 1.0
+      },
+      "description_th": "เครื่องเล่นเกมและอุปกรณ์เกมมิ่ง",
+      "description_en": "Game consoles and gaming gear",
+      "labels": [
+        "เกม",
+        "เกมมิ่ง",
+        "game",
+        "gaming",
+        "console"
+      ],
+      "color": "#9e9ac8"
+    },
+    {
+      "id": "service",
+      "name_th": "ศูนย์บริการซ่อม",
+      "name_en": "Service Center",
+      "rect": {
+        "x": 22.5,
+        "y": 25.5,
+        "w": 8.0,
+        "h": 3.5,
+        "angle_deg": 0.0
+      },
+      "aim": {
+        "x": 26.5,
+        "y": 27.25,
+        "z": 1.0
+      },
+      "description_th": "ซ่อมและรับประกันสินค้า",
+      "description_en": "Repairs and warranty",
+      "labels": [
+        "ซ่อม",
+        "ศูนย์บริการ",
+        "เคลม",
+        "repair",
+        "fix",
+        "warranty"
+      ],
+      "color": "#6baed6"
+    }
+  ],
+  "faq": [
+    {
+      "q_th": "ร้านเปิดกี่โมง",
+      "q_en": "What are the opening hours?",
+      "a_th": "ร้านเปิดทุกวัน 10 โมงเช้าถึง 2 ทุ่มค่ะ",
+      "a_en": "We are open every day from 10 a.m. to 8 p.m."
+    },
+    {
+      "q_th": "มีที่จอดรถไหม",
+      "q_en": "Is there parking?",
+      "a_th": "มีที่จอดรถชั้นใต้ดิน ซื้อครบ 500 บาทจอดฟรี 2 ชั่วโมงค่ะ",
+      "a_en": "There is basement parking, free for 2 hours with a purchase of 500 baht."
+    },
+    {
+      "q_th": "ซ่อมโทรศัพท์ได้ไหม",
+      "q_en": "Can you repair my phone?",
+      "a_th": "ได้ค่ะ ที่ศูนย์บริการซ่อมด้านในสุดทางขวาค่ะ",
+      "a_en": "Yes, at the Service Center at the back on the right.",
+      "booth": "service"
+    }
+  ]
+}
