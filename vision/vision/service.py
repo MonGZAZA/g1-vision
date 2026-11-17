@@ -105,7 +105,7 @@ class Vision:
         self.lidar_mount = parse_mount(args.lidar_mount, {"default": LIDAR_MOUNT}) if args.lidar_port else None
         self.joints = Joints(args.joints_url if (self.geom and args.joints_url and args.joints_url.lower() not in ("", "none")) else "")
         self.camera = Camera(args.camera, args.max_fps) if args.camera else None
-        self.detector = PersonDetector(args.model, gpu=not args.cpu) if args.camera else None
+        self.detector = PersonDetector(args.model, gpu=not args.cpu, backend=getattr(args, "pose_backend", "auto")) if args.camera else None
         self.age_gender = AgeGenderEstimator() if args.camera else None
         self.lidar = LidarReceiver(args.lidar_port) if args.lidar_port else None
         self.lp = LidarPeople()
@@ -351,7 +351,7 @@ class Vision:
                 lip_col = (0, 255, 0) if (p and p.get("talking")) else (0, 255, 255)
                 cv2.line(img, tuple(lp[0]), tuple(lp[1]), lip_col, 2)
                 cv2.line(img, tuple(lp[2]), tuple(lp[3]), (255, 200, 0), 1)
-            label = "facing" if det["facing"] else "not facing"
+            label = (p.get("facing_state") if p and p.get("facing_state") else ("facing" if det["facing"] else "not facing"))
             if p:
                 t_str = " [TALKING]" if p.get("talking") else ""
                 gest = p.get("gesture", "still")
@@ -474,7 +474,7 @@ function loadTop(){
   next.src = '/top.jpg?' + Date.now();
 }
 function tickTable(){
- fetch('/people?all=1').then(r=>r.json()).then(d=>{const k=['id','distance_m','bearing_deg','speed_mps','radial_mps','facing','talking','gesture','pointing_vec','head_yaw_deg','gender','age','source','confirmed','near_s','still_s'];
+ fetch('/people?all=1').then(r=>r.json()).then(d=>{const k=['id','distance_m','bearing_deg','speed_mps','radial_mps','facing','facing_state','talking','gesture','pointing_vec','head_yaw_deg','gender','age','source','confirmed','near_s','still_s'];
   document.getElementById('tab').innerHTML='<tr>'+k.map(x=>'<th>'+x+'</th>').join('')+'</tr>'+d.people.map(p=>'<tr>'+k.map(x=>{
     const v=p[x];if(v===null||v===undefined||v==='')return '<td>-</td>';
     if(x==='talking'&&v===true)return '<td style="color:#0a0;font-weight:bold">true</td>';
@@ -490,7 +490,7 @@ function tickTable(){
       return '<td>-</td>';
     }
     return '<td>'+v+'</td>';}).join('')+'</tr>').join('')
-  +'<tr><td colspan=16>proximity: '+JSON.stringify(d.proximity)+'</td></tr>';});}
+  +'<tr><td colspan=17>proximity: '+JSON.stringify(d.proximity)+'</td></tr>';});}
 function poll(){fetch('/events?after='+seq+'&wait=10').then(r=>r.json()).then(d=>{for(const e of d.events){seq=e.seq;
   ev.textContent=new Date(e.time*1000).toLocaleTimeString()+' '+e.type+' '+(e.person?('#'+e.person.id+' '+e.person.distance_m+' m facing='+e.person.facing):JSON.stringify(e.sectors||''))+'\\n'+ev.textContent;}
   poll();}).catch(()=>setTimeout(poll,1000));}
@@ -579,6 +579,7 @@ def main():
                    help="exp05 server status (joint angles for the sensor poses and the self filter)")
     p.add_argument("--presence-url", default="", help="optional: POST presence (2.2 listener gate), e.g. "
                                                        "http://127.0.0.1:8100/api/listen/presence")
+    p.add_argument("--pose-backend", default="auto", choices=["auto", "rcnn", "mediapipe"], help="pose detector backend")
     p.add_argument("--port", type=int, default=8107)
     p.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to serve other machines (the camera image too)")
     args = p.parse_args()

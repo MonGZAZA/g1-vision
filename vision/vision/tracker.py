@@ -18,6 +18,9 @@ import time
 import numpy as np
 
 from .detector import ANKLE_Z, TORSO_M
+from .gesture_ml import GestureClassifier, estimate_pointing_vector_3d, extract_arm_features
+
+_GESTURE_CLF = GestureClassifier()
 
 NEAR_M, NEAR_EXIT_M = 2.0, 2.3  # person_near zone (+ hysteresis)
 ENGAGE_M = 3.5  # person_facing events only inside this range
@@ -246,6 +249,10 @@ class Track:
         self.gesture_hold_type = None
         self.l_wrist_hist = []
         self.r_wrist_hist = []
+        self.l_arm_hist = []
+        self.r_arm_hist = []
+        self.l_probs = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+        self.r_probs = np.array([1.0, 0.0, 0.0], dtype=np.float32)
         self.gesture_sent = "still"
         self.pointing_arm = None
         self.pointing_vector = None
@@ -335,120 +342,143 @@ class Track:
         self.talking = (self.talking_t is not None) and (now - self.talking_t <= 0.5)
 
     def update_gesture(self, px, vis, world_lms, now):
-        sh_w = np.linalg.norm(px[11] - px[12]) if (vis[11] > 0.3 and vis[12] > 0.3) else 80.0
+        sh_w = float(np.linalg.norm(px[11] - px[12])) if (vis[11] > 0.3 and vis[12] > 0.3) else 80.0
         torso_h = 1.3 * sh_w
         if len(vis) > 24 and vis[23] > 0.3 and vis[24] > 0.3:
             torso_h = max(torso_h, float(np.linalg.norm((px[11] + px[12]) / 2 - (px[23] + px[24]) / 2)))
+        scale = max(sh_w, 0.7 * torso_h, 20.0)
 
         l_hip_2d = px[23] if (len(vis) > 23 and vis[23] > 0.3) else (px[11] + np.array([0.0, torso_h]))
         r_hip_2d = px[24] if (len(vis) > 24 and vis[24] > 0.3) else (px[12] + np.array([0.0, torso_h]))
 
-        l_ok = vis[11] > 0.3 and vis[13] > 0.3 and vis[15] > 0.3
-        r_ok = vis[12] > 0.3 and vis[14] > 0.3 and vis[16] > 0.3
+        l_ok = vis[11] > 0.25 and vis[13] > 0.25 and vis[15] > 0.25
+        r_ok = vis[12] > 0.25 and vis[14] > 0.25 and vis[16] > 0.25
 
-        # 1. Evaluate Pointing First:
-        l_point = False
+        sh_both_ok = vis[11] > 0.3 and vis[12] > 0.3
+        l_out = (1.0 if px[11][0] >= px[12][0] else -1.0) if sh_both_ok else 1.0
+        r_out = -l_out
+
+        # Maintain temporal arm histories for ML classifier
         if l_ok:
-            if _check_point_arm_2d(px[11], px[13], px[15], l_hip_2d, torso_h, sh_w):
-                l_point = True
-            elif world_lms is not None and len(world_lms) > 23:
-                hip_3d = world_lms[23] if vis[23] > 0.3 else (world_lms[11] + np.array([0.0, 0.45, 0.0]))
-                if _check_point_arm_3d(world_lms[11], world_lms[13], world_lms[15], hip_3d):
+            self.l_arm_hist.append({
+                "t": now, "sh": px[11].copy(), "elb": px[13].copy(), "wr": px[15].copy(),
+                "hip": l_hip_2d.copy(), "scale": scale, "out_sign": l_out,
+            })
+        else:
+            self.l_arm_hist = [h for h in self.l_arm_hist if now - h["t"] <= 0.3]
+        self.l_arm_hist = [h for h in self.l_arm_hist if now - h["t"] <= 0.85]
+
+        if r_ok:
+            self.r_arm_hist.append({
+                "t": now, "sh": px[12].copy(), "elb": px[14].copy(), "wr": px[16].copy(),
+                "hip": r_hip_2d.copy(), "scale": scale, "out_sign": r_out,
+            })
+        else:
+            self.r_arm_hist = [h for h in self.r_arm_hist if now - h["t"] <= 0.3]
+        self.r_arm_hist = [h for h in self.r_arm_hist if now - h["t"] <= 0.85]
+
+        if _GESTURE_CLF.loaded:
+            if l_ok and len(self.l_arm_hist) >= 2:
+                lf = extract_arm_features(self.l_arm_hist)
+                lp = _GESTURE_CLF.predict_proba(lf)
+                self.l_probs = 0.55 * self.l_probs + 0.45 * lp
+            else:
+                self.l_probs = 0.70 * self.l_probs + 0.30 * np.array([1.0, 0.0, 0.0], dtype=np.float32)
+
+            if r_ok and len(self.r_arm_hist) >= 2:
+                rf = extract_arm_features(self.r_arm_hist)
+                rp = _GESTURE_CLF.predict_proba(rf)
+                self.r_probs = 0.55 * self.r_probs + 0.45 * rp
+            else:
+                self.r_probs = 0.70 * self.r_probs + 0.30 * np.array([1.0, 0.0, 0.0], dtype=np.float32)
+
+            p_point_l, p_point_r = float(self.l_probs[1]), float(self.r_probs[1])
+            p_wave_l, p_wave_r = float(self.l_probs[2]), float(self.r_probs[2])
+            p_point = max(p_point_l, p_point_r)
+            p_wave = max(p_wave_l, p_wave_r)
+
+            enter_th = 0.55
+            exit_th = 0.38
+            l_point = l_ok and (p_point_l >= (exit_th if self.gesture == "point" and self.pointing_arm == "left" else enter_th))
+            r_point = r_ok and (p_point_r >= (exit_th if self.gesture == "point" and self.pointing_arm == "right" else enter_th))
+            point_active = l_point or r_point
+            wave_active = (not point_active) and (p_wave >= (exit_th if self.gesture == "wave" else enter_th))
+        else:
+            # Fallback geometric rules if gesture_mlp.npz is absent
+            l_point = False
+            if l_ok:
+                if _check_point_arm_2d(px[11], px[13], px[15], l_hip_2d, torso_h, sh_w):
                     l_point = True
+                elif world_lms is not None and len(world_lms) > 23:
+                    hip_3d = world_lms[23] if vis[23] > 0.3 else (world_lms[11] + np.array([0.0, 0.45, 0.0]))
+                    if _check_point_arm_3d(world_lms[11], world_lms[13], world_lms[15], hip_3d):
+                        l_point = True
 
-        r_point = False
-        if r_ok:
-            if _check_point_arm_2d(px[12], px[14], px[16], r_hip_2d, torso_h, sh_w):
-                r_point = True
-            elif world_lms is not None and len(world_lms) > 24:
-                hip_3d = world_lms[24] if vis[24] > 0.3 else (world_lms[12] + np.array([0.0, 0.45, 0.0]))
-                if _check_point_arm_3d(world_lms[12], world_lms[14], world_lms[16], hip_3d):
+            r_point = False
+            if r_ok:
+                if _check_point_arm_2d(px[12], px[14], px[16], r_hip_2d, torso_h, sh_w):
                     r_point = True
+                elif world_lms is not None and len(world_lms) > 24:
+                    hip_3d = world_lms[24] if vis[24] > 0.3 else (world_lms[12] + np.array([0.0, 0.45, 0.0]))
+                    if _check_point_arm_3d(world_lms[12], world_lms[14], world_lms[16], hip_3d):
+                        r_point = True
 
-        point_active = l_point or r_point
+            point_active = l_point or r_point
+            l_bent = l_ok and (np.degrees(np.arccos(np.clip(
+                np.dot(px[11] - px[13], px[15] - px[13]) / (np.linalg.norm(px[11] - px[13]) * np.linalg.norm(px[15] - px[13]) + 1e-6), -1.0, 1.0))) < 140.0)
+            r_bent = r_ok and (np.degrees(np.arccos(np.clip(
+                np.dot(px[12] - px[14], px[16] - px[14]) / (np.linalg.norm(px[12] - px[14]) * np.linalg.norm(px[16] - px[14]) + 1e-6), -1.0, 1.0))) < 140.0)
 
-        # 2. Evaluate Elbow Angles for Waving (waving arm MUST be bent, not straight):
-        l_bent, r_bent = False, False
-        if l_ok:
-            cos_l = np.dot(px[11] - px[13], px[15] - px[13]) / (np.linalg.norm(px[11] - px[13]) * np.linalg.norm(px[15] - px[13]) + 1e-6)
-            l_bent = np.degrees(np.arccos(np.clip(cos_l, -1.0, 1.0))) < 140.0
-        if r_ok:
-            cos_r = np.dot(px[12] - px[14], px[16] - px[14]) / (np.linalg.norm(px[12] - px[14]) * np.linalg.norm(px[16] - px[14]) + 1e-6)
-            r_bent = np.degrees(np.arccos(np.clip(cos_r, -1.0, 1.0))) < 140.0
+            if l_ok and not l_point and l_bent:
+                self.l_wrist_hist.append((now, float(px[15][0] - px[13][0]) + 0.3 * float(px[15][1] - px[13][1])))
+            else:
+                self.l_wrist_hist.clear()
+            self.l_wrist_hist = [(t, x) for t, x in self.l_wrist_hist if now - t <= 0.9]
 
-        # Waving history: only track when hand is bent and NOT pointing
-        if l_ok and not l_point and l_bent:
-            dx = float(px[15][0] - px[13][0])
-            dy = float(px[15][1] - px[13][1])
-            self.l_wrist_hist.append((now, dx + 0.3 * dy))
-        else:
-            self.l_wrist_hist.clear()
-        self.l_wrist_hist = [(t, x) for t, x in self.l_wrist_hist if now - t <= 0.9]
+            if r_ok and not r_point and r_bent:
+                self.r_wrist_hist.append((now, float(px[16][0] - px[14][0]) + 0.3 * float(px[16][1] - px[14][1])))
+            else:
+                self.r_wrist_hist.clear()
+            self.r_wrist_hist = [(t, x) for t, x in self.r_wrist_hist if now - t <= 0.9]
 
-        if r_ok and not r_point and r_bent:
-            dx = float(px[16][0] - px[14][0])
-            dy = float(px[16][1] - px[14][1])
-            self.r_wrist_hist.append((now, dx + 0.3 * dy))
-        else:
-            self.r_wrist_hist.clear()
-        self.r_wrist_hist = [(t, x) for t, x in self.r_wrist_hist if now - t <= 0.9]
-
-        # Wave requires raised hand (wrist above elbow AND near/above shoulder) AND bent arm AND cyclic oscillation
-        l_raised = l_ok and not l_point and l_bent and (px[15][1] < px[13][1] + 25.0) and (px[15][1] < px[11][1] + 0.35 * torso_h)
-        l_waving = l_raised and _is_waving(self.l_wrist_hist, sh_w, min_reversals=2)
-
-        r_raised = r_ok and not r_point and r_bent and (px[16][1] < px[14][1] + 25.0) and (px[16][1] < px[12][1] + 0.35 * torso_h)
-        r_waving = r_raised and _is_waving(self.r_wrist_hist, sh_w, min_reversals=2)
-
-        wave_active = l_waving or r_waving
+            l_waving = l_bent and not l_point and (px[15][1] < px[13][1] + 25.0) and _is_waving(self.l_wrist_hist, sh_w, min_reversals=2)
+            r_waving = r_bent and not r_point and (px[16][1] < px[14][1] + 25.0) and _is_waving(self.r_wrist_hist, sh_w, min_reversals=2)
+            wave_active = l_waving or r_waving
 
         now_point = point_active
         now_wave = wave_active and not point_active
 
-        # If holding point, do not let single hand moves trigger wave
-        if self.gesture_hold_type == "point" and (now - self.gesture_hold_t <= 0.6):
+        # Prevent transient wave trigger right after holding a point
+        if self.gesture_hold_type == "point" and self.gesture_hold_t is not None and (now - self.gesture_hold_t <= 0.45):
             if not now_point and now_wave:
                 now_wave = False
 
         if now_point:
-            arm = "right" if r_point else "left"
+            if l_point and r_point:
+                arm = "right" if float(self.r_probs[1]) >= float(self.l_probs[1]) else "left"
+            else:
+                arm = "right" if r_point else "left"
             sh_idx = 12 if arm == "right" else 11
             elb_idx = 14 if arm == "right" else 13
             wr_idx = 16 if arm == "right" else 15
             finger_idx = 20 if arm == "right" else 19
 
-            # 2D pointing ray in image
             tip_2d = px[finger_idx] if (len(vis) > finger_idx and vis[finger_idx] > 0.35) else px[wr_idx]
-            v2d = tip_2d - px[elb_idx]
-            n2d = float(np.linalg.norm(v2d))
-            if n2d > 1e-3:
-                u2d = v2d / n2d
-            else:
+            tip_idx = finger_idx if (len(vis) > finger_idx and vis[finger_idx] > 0.35) else wr_idx
+
+            sh_other_idx = 11 if arm == "right" else 12
+            hip_2d = r_hip_2d if arm == "right" else l_hip_2d
+            v_rob, u2d = estimate_pointing_vector_3d(
+                px[sh_idx], px[elb_idx], tip_2d, sh_w, world_lms=world_lms, elb_idx=elb_idx, wr_idx=tip_idx,
+                sh_other_2d=px[sh_other_idx], hip_2d=hip_2d, torso_h=torso_h,
+            )
+            if float(np.linalg.norm(u2d)) < 1e-3:
                 u2d = np.array([1.0, 0.0]) if arm == "right" else np.array([-1.0, 0.0])
 
             ray_len = 180.0
             ray_start = px[wr_idx].tolist()
             ray_end = (px[wr_idx] + u2d * ray_len).tolist()
             self.pointing_ray_2d = {"start": ray_start, "end": ray_end, "dir": [round(float(u2d[0]), 3), round(float(u2d[1]), 3)]}
-
-            # 3D pointing vector in Robot Frame (X forward, Y left, Z up)
-            if world_lms is not None and len(world_lms) > wr_idx:
-                e3 = world_lms[elb_idx]
-                w3 = world_lms[finger_idx] if (len(vis) > finger_idx and vis[finger_idx] > 0.35) else world_lms[wr_idx]
-                v3_mp = w3 - e3
-                n3 = float(np.linalg.norm(v3_mp))
-                if n3 > 1e-3:
-                    v3_mp /= n3
-                    v_rob = np.array([v3_mp[2], -v3_mp[0], -v3_mp[1]])
-                    v_rob /= (np.linalg.norm(v_rob) + 1e-6)
-                else:
-                    v_rob = np.array([-0.5, -0.7 if arm == "right" else 0.7, 0.0])
-            else:
-                vy = -float(u2d[0])
-                vz = -float(u2d[1])
-                vx = -0.5
-                v_rob = np.array([vx, vy, vz])
-                v_rob /= (np.linalg.norm(v_rob) + 1e-6)
 
             yaw_deg = math.degrees(math.atan2(v_rob[1], v_rob[0]))
             pitch_deg = math.degrees(math.atan2(v_rob[2], math.hypot(v_rob[0], v_rob[1])))
@@ -471,7 +501,7 @@ class Track:
             self.pointing_yaw_deg = None
             self.pointing_pitch_deg = None
             self.pointing_ray_2d = None
-        elif self.gesture_hold_t is not None and (now - self.gesture_hold_t <= (0.5 if self.gesture_hold_type == "point" else 0.7)):
+        elif self.gesture_hold_t is not None and (now - self.gesture_hold_t <= (0.45 if self.gesture_hold_type == "point" else 0.55)):
             self.gesture = self.gesture_hold_type
         else:
             self.gesture = "still"
@@ -481,6 +511,32 @@ class Track:
             self.pointing_yaw_deg = None
             self.pointing_pitch_deg = None
             self.pointing_ray_2d = None
+
+    def facing_state(self, now, speed, radial):
+        """Granular semantic facing+motion state: walking_facing, walking_past_facing, standing_facing, walking_past, etc."""
+        f = self.facing(now)
+        is_moving = speed > STILL_MPS
+        is_approaching = radial < -0.25
+        is_receding = radial > 0.25
+        if f is True:
+            if is_approaching:
+                return "walking_facing"
+            if is_moving:
+                return "walking_past_facing"
+            return "standing_facing"
+        if f is False:
+            if is_approaching:
+                return "walking_approaching"
+            if is_receding:
+                return "walking_away"
+            if is_moving:
+                return "walking_past"
+            return "standing_away"
+        if is_approaching:
+            return "lidar_approaching"
+        if is_moving:
+            return "lidar_moving"
+        return "lidar_still"
 
     def summary(self, now):
         x, y, vx, vy = self.x
@@ -501,6 +557,7 @@ class Track:
             "heading_deg": round(math.degrees(math.atan2(vy, vx)), 1) if speed > 0.1 else None,
             "moving": speed > STILL_MPS, "approaching": radial < -0.25,
             "facing": self.facing(now),
+            "facing_state": self.facing_state(now, speed, radial),
             "talking": bool(self.talking and cam_active and (r <= 2.2) and self.facing(now)),
             "gesture": gest,
             "pointing_arm": self.pointing_arm if is_pt else None,

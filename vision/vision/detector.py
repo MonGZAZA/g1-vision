@@ -34,22 +34,78 @@ def _box_iou(b1, b2):
     return inter / union if union > 0 else 0.0
 
 
+# Mapping from COCO 17 keypoints -> MediaPipe 33 pose landmark indices
+_COCO_TO_MP = (
+    (0, 0),    # nose
+    (1, 2),    # left_eye
+    (2, 5),    # right_eye
+    (3, 7),    # left_ear
+    (4, 8),    # right_ear
+    (5, 11),   # left_shoulder
+    (6, 12),   # right_shoulder
+    (7, 13),   # left_elbow
+    (8, 14),   # right_elbow
+    (9, 15),   # left_wrist
+    (10, 16),  # right_wrist
+    (11, 23),  # left_hip
+    (12, 24),  # right_hip
+    (13, 25),  # left_knee
+    (14, 26),  # right_knee
+    (15, 27),  # left_ankle
+    (16, 28),  # right_ankle
+)
+
+
 class PersonDetector:
-    def __init__(self, model="full", max_people=10, gpu=True, min_conf=0.30):
-        path = str(MODELS / f"pose_landmarker_{model}.task")
+    def __init__(self, model="full", max_people=35, gpu=True, min_conf=0.65, backend="auto"):
+        self.rcnn = None
+        self.rcnn_device = None
         self.landmarker, self.delegate = None, ""
-        for deleg in ([BaseOptions.Delegate.GPU] if gpu else []) + [BaseOptions.Delegate.CPU]:
+        self.min_conf = min_conf
+        self.max_people = max_people
+
+        # Prefer TorchVision Keypoint R-CNN (BSD-3-Clause) + fine-tuned crowded heads
+        if backend in ("auto", "rcnn"):
             try:
-                opts = mpv.PoseLandmarkerOptions(
-                    base_options=BaseOptions(model_asset_path=path, delegate=deleg),
-                    running_mode=mpv.RunningMode.VIDEO, num_poses=max_people,
-                    min_pose_detection_confidence=min_conf, min_pose_presence_confidence=min_conf,
-                    min_tracking_confidence=0.30)  # fmt: skip
-                self.landmarker = mpv.PoseLandmarker.create_from_options(opts)
-                self.delegate = deleg.name
-                break
-            except Exception as e:  # noqa: BLE001 (no GPU delegate on this machine: use the CPU)
-                print(f"[vision] pose landmarker {deleg.name} not available: {e}", flush=True)
+                import torch
+                from torchvision.models.detection import KeypointRCNN_ResNet50_FPN_Weights, keypointrcnn_resnet50_fpn
+
+                self.rcnn_device = torch.device("cuda" if (gpu and torch.cuda.is_available()) else "cpu")
+                self.rcnn = keypointrcnn_resnet50_fpn(
+                    weights=KeypointRCNN_ResNet50_FPN_Weights.DEFAULT,
+                    box_nms_thresh=0.55,
+                    box_detections_per_img=max_people,
+                    rpn_post_nms_top_n_test=800,
+                )
+                heads_pt = MODELS / "crowd_keypointrcnn_heads.pt"
+                if heads_pt.exists():
+                    head_sd = torch.load(heads_pt, map_location="cpu", weights_only=True)
+                    self.rcnn.load_state_dict({k: v.float() for k, v in head_sd.items()}, strict=False)
+                    tag = "Crowd-KeypointRCNN"
+                else:
+                    tag = "KeypointRCNN"
+                self.rcnn.to(self.rcnn_device).eval()
+                self.delegate = f"{tag}-{self.rcnn_device.type.upper()}"
+                print(f"[vision] Loaded {tag} (BSD-3-Clause) on {self.delegate}", flush=True)
+            except Exception as e:
+                print(f"[vision] KeypointRCNN backend unavailable, falling back to MediaPipe: {e}", flush=True)
+                self.rcnn = None
+
+        if self.rcnn is None:
+            path = str(MODELS / f"pose_landmarker_{model}.task")
+            for deleg in ([BaseOptions.Delegate.GPU] if gpu else []) + [BaseOptions.Delegate.CPU]:
+                try:
+                    opts = mpv.PoseLandmarkerOptions(
+                        base_options=BaseOptions(model_asset_path=path, delegate=deleg),
+                        running_mode=mpv.RunningMode.VIDEO, num_poses=max_people,
+                        min_pose_detection_confidence=0.30, min_pose_presence_confidence=0.30,
+                        min_tracking_confidence=0.30)  # fmt: skip
+                    self.landmarker = mpv.PoseLandmarker.create_from_options(opts)
+                    self.delegate = f"MP-{deleg.name}"
+                    break
+                except Exception as e:  # noqa: BLE001 (no GPU delegate on this machine: use the CPU)
+                    print(f"[vision] pose landmarker {deleg.name} not available: {e}", flush=True)
+
         self.face = cv2.FaceDetectorYN.create(str(MODELS / "face_detection_yunet_2023mar.onnx"), "", (160, 160), 0.6)
         self.face_mesh = None
         fl_path = MODELS / "face_landmarker.task"
@@ -72,39 +128,95 @@ class PersonDetector:
         """List of detections (dicts with pixel quantities) for one BGR frame."""
         t0 = time.perf_counter()
         h, w = bgr.shape[:2]
-        ts = max(self.t_last + 1, int(time.monotonic() * 1000))
-        self.t_last = ts
-        res = self.landmarker.detect_for_video(
-            mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)), ts)
         candidates = []
-        for k, lms in enumerate(res.pose_landmarks):
-            px = np.array([[lm.x * w, lm.y * h] for lm in lms])
-            vis = np.array([min(lm.visibility, lm.presence) for lm in lms])
-            ok = vis > 0.30
-            if ok.sum() < 4:
-                continue
-            torso = [i for i in (L_SH, R_SH, L_HIP, R_HIP) if ok[i]]
-            centre = px[torso].mean(axis=0) if torso else px[ok].mean(axis=0)
-            box = np.concatenate([px[ok].min(axis=0), px[ok].max(axis=0)])
-            det = {"box": box.tolist(), "centre": centre.tolist(), "px": px, "vis": vis,
-                   "score": float(vis[ok].mean()), "torso_px": None, "ankle_px": None, "shoulder_px": None}  # fmt: skip
-            if ok[L_SH] and ok[R_SH]:
-                det["shoulder_px"] = float(np.linalg.norm(px[L_SH] - px[R_SH]))
-            if ok[L_SH] and ok[R_SH] and ok[L_HIP] and ok[R_HIP]:
-                det["torso_px"] = float(np.linalg.norm((px[L_SH] + px[R_SH]) / 2 - (px[L_HIP] + px[R_HIP]) / 2))
-            ank = [i for i in (L_ANK, R_ANK) if vis[i] > 0.6 and 0 <= px[i][1] < h - 2]
-            if ank:
-                det["ankle_px"] = px[ank].mean(axis=0).tolist()
-            det["body_yaw_deg"] = None
-            det["world_lms"] = None
-            if res.pose_world_landmarks and k < len(res.pose_world_landmarks):
-                wl = res.pose_world_landmarks[k]
-                det["world_lms"] = np.array([[lm.x, lm.y, lm.z] for lm in wl])
-                v = np.array([wl[L_SH].x - wl[R_SH].x, wl[L_SH].z - wl[R_SH].z])
-                if np.linalg.norm(v) > 0.1:
-                    det["body_yaw_deg"] = round(math.degrees(math.atan2(v[1], v[0])), 1)
-            det.update(self._face(bgr, px, vis, ok))
-            candidates.append(det)
+
+        if self.rcnn is not None:
+            import torch
+
+            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+            img_t = torch.from_numpy(rgb).to(self.rcnn_device).permute(2, 0, 1).float() / 255.0
+            with torch.no_grad(), torch.amp.autocast("cuda", enabled=(self.rcnn_device.type == "cuda")):
+                pred = self.rcnn([img_t])[0]
+
+            keep = (pred["labels"] == 1) & (pred["scores"] >= self.min_conf)
+            boxes = pred["boxes"][keep].cpu().numpy()
+            scores = pred["scores"][keep].cpu().numpy()
+            kpts = pred["keypoints"][keep].cpu().numpy()  # (N, 17, 3) -> x, y, visibility
+            kpt_scores = pred["keypoints_scores"][keep].cpu().numpy() if "keypoints_scores" in pred else None
+
+            for idx, (box, score, kp) in enumerate(zip(boxes, scores, kpts)):
+                px = np.zeros((33, 2), dtype=float)
+                vis = np.zeros(33, dtype=float)
+                ks = kpt_scores[idx] if kpt_scores is not None else kp[:, 2]
+                for ci, mi in _COCO_TO_MP:
+                    px[mi] = kp[ci, :2]
+                    # KeypointRCNN keypoints_scores are logits; map > 0 to high conf via sigmoid
+                    if kpt_scores is not None:
+                        vis[mi] = float(1.0 / (1.0 + math.exp(-max(-10.0, min(10.0, float(ks[ci]))))))
+                    else:
+                        vis[mi] = 0.9 if kp[ci, 2] > 0 else 0.0
+                ok = vis > 0.35
+                if ok.sum() < 3:
+                    continue
+                torso = [i for i in (L_SH, R_SH, L_HIP, R_HIP) if ok[i]]
+                if torso:
+                    centre = px[torso].mean(axis=0)
+                else:
+                    centre = np.array([(box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0])
+                det = {
+                    "box": [float(box[0]), float(box[1]), float(box[2]), float(box[3])],
+                    "centre": centre.tolist(),
+                    "px": px,
+                    "vis": vis,
+                    "score": float(score),
+                    "torso_px": None,
+                    "ankle_px": None,
+                    "shoulder_px": None,
+                    "body_yaw_deg": None,
+                    "world_lms": None,
+                }
+                if ok[L_SH] and ok[R_SH]:
+                    det["shoulder_px"] = float(np.linalg.norm(px[L_SH] - px[R_SH]))
+                if ok[L_SH] and ok[R_SH] and ok[L_HIP] and ok[R_HIP]:
+                    det["torso_px"] = float(np.linalg.norm((px[L_SH] + px[R_SH]) / 2 - (px[L_HIP] + px[R_HIP]) / 2))
+                ank = [i for i in (L_ANK, R_ANK) if vis[i] > 0.45 and 0 <= px[i][1] < h - 2]
+                if ank:
+                    det["ankle_px"] = px[ank].mean(axis=0).tolist()
+                det.update(self._face(bgr, px, vis, ok))
+                candidates.append(det)
+        else:
+            ts = max(self.t_last + 1, int(time.monotonic() * 1000))
+            self.t_last = ts
+            res = self.landmarker.detect_for_video(
+                mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)), ts)
+            for k, lms in enumerate(res.pose_landmarks):
+                px = np.array([[lm.x * w, lm.y * h] for lm in lms])
+                vis = np.array([min(lm.visibility, lm.presence) for lm in lms])
+                ok = vis > 0.30
+                if ok.sum() < 4:
+                    continue
+                torso = [i for i in (L_SH, R_SH, L_HIP, R_HIP) if ok[i]]
+                centre = px[torso].mean(axis=0) if torso else px[ok].mean(axis=0)
+                box = np.concatenate([px[ok].min(axis=0), px[ok].max(axis=0)])
+                det = {"box": box.tolist(), "centre": centre.tolist(), "px": px, "vis": vis,
+                       "score": float(vis[ok].mean()), "torso_px": None, "ankle_px": None, "shoulder_px": None}  # fmt: skip
+                if ok[L_SH] and ok[R_SH]:
+                    det["shoulder_px"] = float(np.linalg.norm(px[L_SH] - px[R_SH]))
+                if ok[L_SH] and ok[R_SH] and ok[L_HIP] and ok[R_HIP]:
+                    det["torso_px"] = float(np.linalg.norm((px[L_SH] + px[R_SH]) / 2 - (px[L_HIP] + px[R_HIP]) / 2))
+                ank = [i for i in (L_ANK, R_ANK) if vis[i] > 0.6 and 0 <= px[i][1] < h - 2]
+                if ank:
+                    det["ankle_px"] = px[ank].mean(axis=0).tolist()
+                det["body_yaw_deg"] = None
+                det["world_lms"] = None
+                if res.pose_world_landmarks and k < len(res.pose_world_landmarks):
+                    wl = res.pose_world_landmarks[k]
+                    det["world_lms"] = np.array([[lm.x, lm.y, lm.z] for lm in wl])
+                    v = np.array([wl[L_SH].x - wl[R_SH].x, wl[L_SH].z - wl[R_SH].z])
+                    if np.linalg.norm(v) > 0.1:
+                        det["body_yaw_deg"] = round(math.degrees(math.atan2(v[1], v[0])), 1)
+                det.update(self._face(bgr, px, vis, ok))
+                candidates.append(det)
 
         # NMS deduplication for crowded scenes
         candidates.sort(key=lambda d: d["score"], reverse=True)
