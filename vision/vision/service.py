@@ -105,7 +105,7 @@ class Vision:
         self.lidar_mount = parse_mount(args.lidar_mount, {"default": LIDAR_MOUNT}) if args.lidar_port else None
         self.joints = Joints(args.joints_url if (self.geom and args.joints_url and args.joints_url.lower() not in ("", "none")) else "")
         self.camera = Camera(args.camera, args.max_fps) if args.camera else None
-        self.detector = PersonDetector(args.model, gpu=not args.cpu) if args.camera else None
+        self.detector = PersonDetector(args.model, gpu=not args.cpu, backend=getattr(args, "pose_backend", "auto")) if args.camera else None
         self.age_gender = AgeGenderEstimator() if args.camera else None
         self.lidar = LidarReceiver(args.lidar_port) if args.lidar_port else None
         self.lp = LidarPeople()
@@ -579,6 +579,7 @@ def main():
                    help="exp05 server status (joint angles for the sensor poses and the self filter)")
     p.add_argument("--presence-url", default="", help="optional: POST presence (2.2 listener gate), e.g. "
                                                        "http://127.0.0.1:8100/api/listen/presence")
+    p.add_argument("--pose-backend", default="auto", choices=["auto", "rcnn", "mediapipe"], help="pose detector backend")
     p.add_argument("--port", type=int, default=8107)
     p.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to serve other machines (the camera image too)")
     args = p.parse_args()
