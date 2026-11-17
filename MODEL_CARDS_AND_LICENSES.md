@@ -10,6 +10,7 @@ All newly trained models, datasets, and inference backends added to **G1 Vision*
 | :--- | :--- | :--- | :--- | :--- |
 | **Crowded Human & Pose Detector** | **Keypoint R-CNN (`ResNet50-FPN`) + `crowd_keypointrcnn_heads.pt`** | PyTorch / TorchVision (`torchvision.models.detection.keypointrcnn_resnet50_fpn`), fine-tuned on COCO 2017 crowded subset ($\ge 3$ people/frame) | **BSD-3-Clause** | **Yes** |
 | **Temporal Gesture Classifier** | **GestureNet (`gesture_mlp.npz`)** | Custom 3-layer MLP trained from scratch on 36,000 3D$\rightarrow$2D kinematic upper-body sequences (`still`, `point`, `wave`) | **MIT** | **Yes** |
+| **3D Pointing Direction Regressor** | **PointingDirNet (`pointing_dir_mlp.npz`)** | Custom 3-layer MLP trained from scratch on 30,000 3D$\rightarrow$2D pointing poses (cosine-similarity loss, $6.79^\circ$ median 3D error) | **MIT** | **Yes** |
 | **Fallback Pose Detector** | **MediaPipe Pose Landmarker (`lite` / `full` / `heavy`)** | Google AI Edge / MediaPipe Tasks | **Apache-2.0** | **Yes** |
 | **Face Detector & Head Yaw** | **YuNet (`face_detection_yunet_2023mar.onnx`)** | OpenCV Zoo (`opencv_zoo/models/face_detection_yunet`) | **MIT** | **Yes** |
 | **Talking / Lip Blendshapes** | **MediaPipe Face Landmarker (`face_landmarker.task`)** | Google AI Edge / MediaPipe Tasks | **Apache-2.0** | **Yes** |

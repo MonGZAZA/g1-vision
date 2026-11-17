@@ -44,6 +44,7 @@ vision/models/*.onnx
 !vision/models/pose_landmarker_heavy.task
 !vision/models/crowd_keypointrcnn_heads.pt
 !vision/models/gesture_mlp.npz
+!vision/models/pointing_dir_mlp.npz
 
 # Cache & Temporary Files
 .cache/

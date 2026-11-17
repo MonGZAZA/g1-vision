@@ -466,8 +466,11 @@ class Track:
             tip_2d = px[finger_idx] if (len(vis) > finger_idx and vis[finger_idx] > 0.35) else px[wr_idx]
             tip_idx = finger_idx if (len(vis) > finger_idx and vis[finger_idx] > 0.35) else wr_idx
 
+            sh_other_idx = 11 if arm == "right" else 12
+            hip_2d = r_hip_2d if arm == "right" else l_hip_2d
             v_rob, u2d = estimate_pointing_vector_3d(
-                px[sh_idx], px[elb_idx], tip_2d, sh_w, world_lms=world_lms, elb_idx=elb_idx, wr_idx=tip_idx
+                px[sh_idx], px[elb_idx], tip_2d, sh_w, world_lms=world_lms, elb_idx=elb_idx, wr_idx=tip_idx,
+                sh_other_2d=px[sh_other_idx], hip_2d=hip_2d, torso_h=torso_h,
             )
             if float(np.linalg.norm(u2d)) < 1e-3:
                 u2d = np.array([1.0, 0.0]) if arm == "right" else np.array([-1.0, 0.0])
@@ -509,6 +512,32 @@ class Track:
             self.pointing_pitch_deg = None
             self.pointing_ray_2d = None
 
+    def facing_state(self, now, speed, radial):
+        """Granular semantic facing+motion state: walking_facing, walking_past_facing, standing_facing, walking_past, etc."""
+        f = self.facing(now)
+        is_moving = speed > STILL_MPS
+        is_approaching = radial < -0.25
+        is_receding = radial > 0.25
+        if f is True:
+            if is_approaching:
+                return "walking_facing"
+            if is_moving:
+                return "walking_past_facing"
+            return "standing_facing"
+        if f is False:
+            if is_approaching:
+                return "walking_approaching"
+            if is_receding:
+                return "walking_away"
+            if is_moving:
+                return "walking_past"
+            return "standing_away"
+        if is_approaching:
+            return "lidar_approaching"
+        if is_moving:
+            return "lidar_moving"
+        return "lidar_still"
+
     def summary(self, now):
         x, y, vx, vy = self.x
         ahead = min(max(now - self.t, 0.0), 0.4)  # report where the person is now (measurements are ~0.1 s old)
@@ -528,6 +557,7 @@ class Track:
             "heading_deg": round(math.degrees(math.atan2(vy, vx)), 1) if speed > 0.1 else None,
             "moving": speed > STILL_MPS, "approaching": radial < -0.25,
             "facing": self.facing(now),
+            "facing_state": self.facing_state(now, speed, radial),
             "talking": bool(self.talking and cam_active and (r <= 2.2) and self.facing(now)),
             "gesture": gest,
             "pointing_arm": self.pointing_arm if is_pt else None,

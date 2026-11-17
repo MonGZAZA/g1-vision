@@ -50,11 +50,16 @@ The Unitree G1 exposes two camera HTTP streaming endpoints on port 8000 (serving
 
 ## 3. How to Run
 
-### Option A: Standard Run with Robot Camera (Recommended)
-Open PowerShell and run:
+### Option A: Standard Run with Robot Camera + LiDAR over LAN (Recommended)
+Run the pre-configured LAN + Livox MID-360 LiDAR launcher (`Ethernet 192.168.123.222/24`, UDP `56301`):
 ```powershell
 cd vision
-python -m vision.service --camera unitree:http://192.168.123.100:8000/capture --camera-mount level --hfov 69 --max-fps 30 --port 8107 --joints-url none
+.\run_robot_vision.ps1
+```
+Or run manually:
+```powershell
+cd vision
+python -m vision.service --camera unitree:http://192.168.123.100:8000/capture --camera-mount level --hfov 69 --lidar-port 56301 --max-fps 30 --port 8107 --joints-url none
 ```
 
 ### Option B: Local USB Webcam Fallback (Testing without Robot)
@@ -140,9 +145,10 @@ Once running, navigate to:
   * Replaced single-stage MediaPipe BlazePose as the primary detector with TorchVision `KeypointRCNN_ResNet50_FPN` (`BSD-3-Clause`), fine-tuned on **794 crowded COCO 2017 images** ($\ge 3$ people/frame; 652 train / 142 held-out crowded val, **CC BY 4.0**) with occlusion and lighting augmentations.
   * **Validation Improvement**: Crowded val F1 jumped from **0.5640 $\rightarrow$ 0.6605** (+9.65 F1, false positives reduced by **35.7%** at ~95% recall). On dense 12-person test frames, detects 12/12+ foreground/midground people vs. 2/12 with MediaPipe.
   * Saved FP16 fine-tuned head weights to `vision/models/crowd_keypointrcnn_heads.pt` (71.38 MB). Use `--pose-backend mediapipe` if you want the CPU MediaPipe fallback.
-* **Temporal ML Gesture Classifier (`GestureNet`, MIT)**:
-  * Trained a 30-feature scale-invariant & FPS-invariant temporal MLP (`vision/models/gesture_mlp.npz`, 32.5 KB) on **36,000 train / 6,000 val** 3D$\rightarrow$2D pinhole-projected kinematic sequences (`still`, `point`, `wave`), including foreshortened forward pointing, arm-lift transitions, and hard negatives (crossed arms, phone/head, conversational hands).
-  * **Validation**: **100.0% accuracy (F1 = 1.000)** on held-out kinematic sequences, with EMA smoothing and hysteresis (`enter >= 0.55`, `exit < 0.38`) plus analytical 3D inverse-foreshortening pointing vector recovery.
+* **Temporal ML Gesture & Learned 3D Pointing Direction (`GestureNet` + `PointingDirNet`, MIT)**:
+  * **`GestureNet`** (`vision/models/gesture_mlp.npz`, 32.5 KB): 30-feature scale- & FPS-invariant temporal MLP trained on **36,000 train / 6,000 val** 3D$\rightarrow$2D kinematic sequences (`still`, `point`, `wave`), achieving **100.0% validation accuracy**, with EMA smoothing and hysteresis (`enter >= 0.55`, `exit < 0.38`).
+  * **`PointingDirNet`** (`vision/models/pointing_dir_mlp.npz`, 34.1 KB): 18-feature 3D unit-vector regressor trained on **30,000 train / 5,000 val** 3D pointing poses with cosine-similarity loss, achieving **6.79° median / 9.24° mean 3D angular error** in the Robot Frame (`X` forward, `Y` left, `Z` up).
+* **Granular `facing_state`**: Added semantic facing+motion classification (`walking_facing`, `walking_past_facing`, `standing_facing`, `walking_approaching`, `walking_away`, `walking_past`, `standing_away`, `lidar_approaching`, `lidar_moving`, `lidar_still`) to `/people`, video overlays, and the web table.
 * **Re-training Scripts**:
   * `python vision/training/prepare_and_train_crowd_pose.py`
   * `python vision/training/train_gesture.py`
