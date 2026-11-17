@@ -351,7 +351,7 @@ class Vision:
                 lip_col = (0, 255, 0) if (p and p.get("talking")) else (0, 255, 255)
                 cv2.line(img, tuple(lp[0]), tuple(lp[1]), lip_col, 2)
                 cv2.line(img, tuple(lp[2]), tuple(lp[3]), (255, 200, 0), 1)
-            label = "facing" if det["facing"] else "not facing"
+            label = (p.get("facing_state") if p and p.get("facing_state") else ("facing" if det["facing"] else "not facing"))
             if p:
                 t_str = " [TALKING]" if p.get("talking") else ""
                 gest = p.get("gesture", "still")
@@ -474,7 +474,7 @@ function loadTop(){
   next.src = '/top.jpg?' + Date.now();
 }
 function tickTable(){
- fetch('/people?all=1').then(r=>r.json()).then(d=>{const k=['id','distance_m','bearing_deg','speed_mps','radial_mps','facing','talking','gesture','pointing_vec','head_yaw_deg','gender','age','source','confirmed','near_s','still_s'];
+ fetch('/people?all=1').then(r=>r.json()).then(d=>{const k=['id','distance_m','bearing_deg','speed_mps','radial_mps','facing','facing_state','talking','gesture','pointing_vec','head_yaw_deg','gender','age','source','confirmed','near_s','still_s'];
   document.getElementById('tab').innerHTML='<tr>'+k.map(x=>'<th>'+x+'</th>').join('')+'</tr>'+d.people.map(p=>'<tr>'+k.map(x=>{
     const v=p[x];if(v===null||v===undefined||v==='')return '<td>-</td>';
     if(x==='talking'&&v===true)return '<td style="color:#0a0;font-weight:bold">true</td>';
@@ -490,7 +490,7 @@ function tickTable(){
       return '<td>-</td>';
     }
     return '<td>'+v+'</td>';}).join('')+'</tr>').join('')
-  +'<tr><td colspan=16>proximity: '+JSON.stringify(d.proximity)+'</td></tr>';});}
+  +'<tr><td colspan=17>proximity: '+JSON.stringify(d.proximity)+'</td></tr>';});}
 function poll(){fetch('/events?after='+seq+'&wait=10').then(r=>r.json()).then(d=>{for(const e of d.events){seq=e.seq;
   ev.textContent=new Date(e.time*1000).toLocaleTimeString()+' '+e.type+' '+(e.person?('#'+e.person.id+' '+e.person.distance_m+' m facing='+e.person.facing):JSON.stringify(e.sectors||''))+'\\n'+ev.textContent;}
   poll();}).catch(()=>setTimeout(poll,1000));}
