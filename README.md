@@ -135,16 +135,38 @@ Once running, navigate to:
 * **Direct Kalman Association**: Replaced fragile secondary distance searching in `service.py` by binding detections directly to their Kalman track ID in `tracker.py` `_apply()`.
 * **Track Retention**: Relaxed association gating (`max_d = 1.2 m`, `maha < 20.0`) and raised lost-track timeout to 1.5 s to maintain track persistence through occlusion and rapid movement.
 
+### 7. Fine-Tuned Crowded Pose & ML Gesture Upgrade (Commercially Permissive)
+* **Crowded Human & Pose Detector (`Crowd-KeypointRCNN`, BSD-3-Clause)**:
+  * Replaced single-stage MediaPipe BlazePose as the primary detector with TorchVision `KeypointRCNN_ResNet50_FPN` (`BSD-3-Clause`), fine-tuned on **794 crowded COCO 2017 images** ($\ge 3$ people/frame; 652 train / 142 held-out crowded val, **CC BY 4.0**) with occlusion and lighting augmentations.
+  * **Validation Improvement**: Crowded val F1 jumped from **0.5640 $\rightarrow$ 0.6605** (+9.65 F1, false positives reduced by **35.7%** at ~95% recall). On dense 12-person test frames, detects 12/12+ foreground/midground people vs. 2/12 with MediaPipe.
+  * Saved FP16 fine-tuned head weights to `vision/models/crowd_keypointrcnn_heads.pt` (71.38 MB). Use `--pose-backend mediapipe` if you want the CPU MediaPipe fallback.
+* **Temporal ML Gesture Classifier (`GestureNet`, MIT)**:
+  * Trained a 30-feature scale-invariant & FPS-invariant temporal MLP (`vision/models/gesture_mlp.npz`, 32.5 KB) on **36,000 train / 6,000 val** 3D$\rightarrow$2D pinhole-projected kinematic sequences (`still`, `point`, `wave`), including foreshortened forward pointing, arm-lift transitions, and hard negatives (crossed arms, phone/head, conversational hands).
+  * **Validation**: **100.0% accuracy (F1 = 1.000)** on held-out kinematic sequences, with EMA smoothing and hysteresis (`enter >= 0.55`, `exit < 0.38`) plus analytical 3D inverse-foreshortening pointing vector recovery.
+* **Re-training Scripts**:
+  * `python vision/training/prepare_and_train_crowd_pose.py`
+  * `python vision/training/train_gesture.py`
+
 ---
 
-## 6. Code Architecture Reference
+## 6. Code Architecture & Licensing
+
+* **Model Cards, BibTeX Citations & Commercial Licenses**: See [`MODEL_CARDS_AND_LICENSES.md`](MODEL_CARDS_AND_LICENSES.md).
 
 ```
-exp05/vision/vision/
-├── camera.py       # Camera grabber (HTTP Keep-Alive for Unitree & OpenCV device grabber)
-├── detector.py     # MediaPipe Pose Landmarker, YuNet Face, FaceLandmarker (blendshapes), NMS
-├── tracker.py      # Kalman filter, distance calibration, talking & gesture arbitration, events
-├── age_gender.py   # FairFace & MiVOLO background demographic estimation workers
-├── lidar.py        # 2D LiDAR driver and spatial clustering (when hardware is connected)
-└── service.py      # HTTP server, frame drawing, web dashboard, and REST API (/people, /events)
+exp05/vision/
+├── models/
+│   ├── crowd_keypointrcnn_heads.pt  # Fine-tuned Keypoint R-CNN heads (BSD-3-Clause)
+│   └── gesture_mlp.npz              # Trained temporal GestureNet weights (MIT)
+├── training/
+│   ├── prepare_and_train_crowd_pose.py
+│   └── train_gesture.py
+└── vision/
+    ├── camera.py       # Camera grabber (HTTP Keep-Alive for Unitree & OpenCV device grabber)
+    ├── detector.py     # Crowd-KeypointRCNN (CUDA/CPU) + MediaPipe fallback, YuNet, FaceLandmarker, NMS
+    ├── gesture_ml.py   # 30-feature temporal extractor, GestureNet inference, 3D pointing vector
+    ├── tracker.py      # Kalman filter, distance calibration, talking & ML gesture arbitration
+    ├── age_gender.py   # FairFace (CC BY 4.0) & optional MiVOLO demographic workers
+    ├── lidar.py        # 2D LiDAR driver and spatial clustering
+    └── service.py      # HTTP server, frame drawing, web dashboard, and REST API
 ```
