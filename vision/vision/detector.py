@@ -71,11 +71,17 @@ class PersonDetector:
                 from torchvision.models.detection import KeypointRCNN_ResNet50_FPN_Weights, keypointrcnn_resnet50_fpn
 
                 self.rcnn_device = torch.device("cuda" if (gpu and torch.cuda.is_available()) else "cpu")
+                if self.rcnn_device.type == "cuda":
+                    torch.backends.cudnn.benchmark = True
                 self.rcnn = keypointrcnn_resnet50_fpn(
                     weights=KeypointRCNN_ResNet50_FPN_Weights.DEFAULT,
+                    min_size=400,
+                    max_size=560,
+                    box_score_thresh=min_conf,
                     box_nms_thresh=0.55,
                     box_detections_per_img=max_people,
-                    rpn_post_nms_top_n_test=800,
+                    rpn_pre_nms_top_n_test=200,
+                    rpn_post_nms_top_n_test=200,
                 )
                 heads_pt = MODELS / "crowd_keypointrcnn_heads.pt"
                 if heads_pt.exists():
@@ -85,6 +91,9 @@ class PersonDetector:
                 else:
                     tag = "KeypointRCNN"
                 self.rcnn.to(self.rcnn_device).eval()
+                if self.rcnn_device.type == "cuda":
+                    with torch.no_grad(), torch.amp.autocast("cuda"):
+                        self.rcnn([torch.zeros(3, 480, 640, device=self.rcnn_device)])
                 self.delegate = f"{tag}-{self.rcnn_device.type.upper()}"
                 print(f"[vision] Loaded {tag} (BSD-3-Clause) on {self.delegate}", flush=True)
             except Exception as e:
