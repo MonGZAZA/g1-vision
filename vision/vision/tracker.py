@@ -86,7 +86,7 @@ class CameraModel:
         return uv is not None and margin <= uv[0] <= self.w - margin
 
     def place(self, det):
-        """Robot-frame (x, y) of a detection from the image alone, and how: feet on the floor, else torso length."""
+        """Robot-frame (x, y) of a detection from the image alone, fusing stable cues to minimize depth jitter."""
         if det.get("ankle_px"):
             d = self.ray(*det["ankle_px"])
             if d[2] < -0.05:
@@ -97,32 +97,33 @@ class CameraModel:
                     cal_r = calibrate_camera_distance(raw_r)
                     q[:2] = q[:2] * (cal_r / max(raw_r, 1e-6))
                     return q[:2], "feet"
+
+        # Smoothly fuse torso, face, and shoulder cues so switching/turning doesn't jump range
+        cues = []
         if det.get("torso_px"):
             dist = self.f * TORSO_M / max(det["torso_px"], 1.0)
-            if dist < 15:
-                q = self.p + dist * self.ray(*det["centre"])
-                raw_r = float(np.hypot(q[0], q[1]))
-                cal_r = calibrate_camera_distance(raw_r)
-                q[:2] = q[:2] * (cal_r / max(raw_r, 1e-6))
-                return q[:2], "torso"
-        if det.get("shoulder_px"):
-            dist = self.f * 0.40 / max(det["shoulder_px"], 1.0)
             if 0.3 < dist < 15:
-                q = self.p + dist * self.ray(*det["centre"])
-                raw_r = float(np.hypot(q[0], q[1]))
-                cal_r = calibrate_camera_distance(raw_r)
-                q[:2] = q[:2] * (cal_r / max(raw_r, 1e-6))
-                return q[:2], "shoulders"
+                cues.append((dist, 0.50, "torso"))
         if det.get("face_box"):
             fb = det["face_box"]
             fh = max(abs(fb[3] - fb[1]), 1.0)
             dist = self.f * 0.20 / fh
             if 0.3 < dist < 15:
-                q = self.p + dist * self.ray(*det["centre"])
-                raw_r = float(np.hypot(q[0], q[1]))
-                cal_r = calibrate_camera_distance(raw_r)
-                q[:2] = q[:2] * (cal_r / max(raw_r, 1e-6))
-                return q[:2], "face"
+                cues.append((dist, 0.35, "face"))
+        if det.get("shoulder_px"):
+            dist = self.f * 0.40 / max(det["shoulder_px"], 1.0)
+            if 0.3 < dist < 15:
+                cues.append((dist, 0.20, "shoulders"))
+
+        if cues:
+            w_sum = sum(w for _, w, _ in cues)
+            dist = sum(d * w for d, w, _ in cues) / w_sum
+            how = "+".join(name for _, _, name in cues) if len(cues) > 1 else cues[0][2]
+            q = self.p + dist * self.ray(*det["centre"])
+            raw_r = float(np.hypot(q[0], q[1]))
+            cal_r = calibrate_camera_distance(raw_r)
+            q[:2] = q[:2] * (cal_r / max(raw_r, 1e-6))
+            return q[:2], how
         return None, None
 
 
@@ -278,12 +279,22 @@ class Track:
         self.P = F @ self.P @ F.T + G @ G.T * q
         self.t = t
 
-    def update(self, z, sigma):
+    def update(self, z, sigma, source="camera"):
         H = np.zeros((2, 4))
         H[0, 0] = H[1, 1] = 1
-        S = H @ self.P @ H.T + np.eye(2) * sigma**2
+        z_arr = np.asarray(z, dtype=float)
+        if source == "camera":
+            r = float(np.linalg.norm(z_arr))
+            u = z_arr / max(r, 1e-4)
+            u_perp = np.array([-u[1], u[0]])
+            sig_r = max(0.45, 0.28 * r)
+            sig_t = max(0.05, 0.04 * r)
+            R = (sig_r ** 2) * np.outer(u, u) + (sig_t ** 2) * np.outer(u_perp, u_perp)
+        else:
+            R = np.eye(2) * (sigma ** 2)
+        S = H @ self.P @ H.T + R
         K = self.P @ H.T @ np.linalg.inv(S)
-        self.x = self.x + K @ (np.asarray(z) - H @ self.x)
+        self.x = self.x + K @ (z_arr - H @ self.x)
         self.P = (np.eye(4) - K @ H) @ self.P
         self.hits += 1
         self.t_seen = self.t
@@ -540,10 +551,12 @@ class Track:
 
     def summary(self, now):
         x, y, vx, vy = self.x
-        ahead = min(max(now - self.t, 0.0), 0.4)  # report where the person is now (measurements are ~0.1 s old)
+        speed = math.hypot(vx, vy)
+        if self.source == "camera" and speed < 0.14:
+            vx, vy, speed = 0.0, 0.0, 0.0
+        ahead = min(max(now - self.t, 0.0), 0.4) if speed > 0.0 else 0.0
         x, y = x + vx * ahead, y + vy * ahead
         r = math.hypot(x, y)
-        speed = math.hypot(vx, vy)
         radial = (x * vx + y * vy) / r if r > 1e-3 else 0.0
         cam_active = bool(self.camera_seen_t and now - self.camera_seen_t <= 0.8)
         gest = self.gesture if cam_active else "still"
@@ -613,8 +626,9 @@ class Tracker:
 
     def step(self, now, meas, cam=None, lidar_active=False):
         """meas: list of dicts {xy, sigma, source, det?, gap?}. Updates tracks, emits events."""
+        accel = 1.5 if lidar_active else 0.55
         for tr in self.tracks:
-            tr.predict(now)
+            tr.predict(now, accel=accel)
         pairs = []
         for i, tr in enumerate(self.tracks):
             S = tr.P[:2, :2]
@@ -670,7 +684,7 @@ class Tracker:
 
     def _apply(self, tr, m, now, new=False):
         if not new:
-            tr.update(m["xy"], m["sigma"])
+            tr.update(m["xy"], m["sigma"], source=m["source"])
             tr.source = m["source"]
         elif not tr.source:
             tr.source = m["source"]
