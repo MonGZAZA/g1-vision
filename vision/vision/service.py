@@ -115,6 +115,7 @@ class Vision:
         self.frame = None
         self.view = {"pts": np.zeros((0, 3)), "clusters": [], "prox": {}}
         self.people, self.prox = [], {}
+        self.thumbs = {}
         self.clusters, self.kept, self.last_lidar_t = [], np.zeros((0, 3)), 0.0
         self.loop_ms = 0.0
         self.floor_z = None
@@ -240,25 +241,44 @@ class Vision:
         for m in meas:  # tracks matched to detections: give the detection its track id (drawing)
             if "det" in m:
                 tr_id = m["det"].get("track")
-                if tr_id is not None and self.age_gender is not None and self.frame is not None and m["det"].get("face_box"):
-                    fb = m["det"]["face_box"]
+                if tr_id is not None and self.frame is not None:
                     h, w = self.frame.shape[:2]
-                    fw, fh = fb[2] - fb[0], fb[3] - fb[1]
-                    px0 = max(0, int(fb[0] - fw * 0.2))
-                    py0 = max(0, int(fb[1] - fh * 0.2))
-                    px1 = min(w, int(fb[2] + fw * 0.2))
-                    py1 = min(h, int(fb[3] + fh * 0.2))
-                    if px1 > px0 + 16 and py1 > py0 + 16:
-                        face_crop = self.frame[py0:py1, px0:px1]
-                        bx = m["det"]["box"]
-                        bx0, by0 = max(0, int(bx[0])), max(0, int(bx[1]))
-                        bx1, by1 = min(w, int(bx[2])), min(h, int(bx[3]))
-                        body_crop = self.frame[by0:by1, bx0:bx1] if bx1 > bx0 + 16 and by1 > by0 + 16 else None
-                        self.age_gender.submit(tr_id, face_crop, body_crop)
+                    fb = m["det"].get("face_box")
+                    bx = m["det"]["box"]
+                    if fb:
+                        fw, fh = fb[2] - fb[0], fb[3] - fb[1]
+                        tx0, ty0 = max(0, int(fb[0] - fw * 0.35)), max(0, int(fb[1] - fh * 0.35))
+                        tx1, ty1 = min(w, int(fb[2] + fw * 0.35)), min(h, int(fb[3] + fh * 0.35))
+                    else:
+                        tx0, ty0 = max(0, int(bx[0])), max(0, int(bx[1]))
+                        tx1, ty1 = min(w, int(bx[2])), min(h, int(bx[1] + (bx[3] - bx[1]) * 0.55))
+                    if tx1 > tx0 + 12 and ty1 > ty0 + 12:
+                        crop = cv2.resize(self.frame[ty0:ty1, tx0:tx1], (72, 72))
+                        ok_jpg, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                        if ok_jpg:
+                            with self.lock:
+                                self.thumbs[tr_id] = buf.tobytes()
 
+                    if self.age_gender is not None and fb:
+                        fw, fh = fb[2] - fb[0], fb[3] - fb[1]
+                        px0 = max(0, int(fb[0] - fw * 0.2))
+                        py0 = max(0, int(fb[1] - fh * 0.2))
+                        px1 = min(w, int(fb[2] + fw * 0.2))
+                        py1 = min(h, int(fb[3] + fh * 0.2))
+                        if px1 > px0 + 16 and py1 > py0 + 16:
+                            face_crop = self.frame[py0:py1, px0:px1]
+                            bx0, by0 = max(0, int(bx[0])), max(0, int(bx[1]))
+                            bx1, by1 = min(w, int(bx[2])), min(h, int(bx[3]))
+                            body_crop = self.frame[by0:by1, bx0:bx1] if bx1 > bx0 + 16 and by1 > by0 + 16 else None
+                            self.age_gender.submit(tr_id, face_crop, body_crop)
+
+        active_ids = {t.id for t in self.tracker.tracks}
+        with self.lock:
+            for tid in list(self.thumbs):
+                if tid not in active_ids:
+                    del self.thumbs[tid]
         if self.age_gender is not None:
-            active_ids = [t.id for t in self.tracker.tracks]
-            self.age_gender.purge_tracks(active_ids)
+            self.age_gender.purge_tracks(list(active_ids))
             for tr in self.tracker.tracks:
                 g, a = self.age_gender.get(tr.id)
                 if g is not None:
@@ -303,6 +323,15 @@ class Vision:
             "presence": {"url": a.presence_url, "posts": self.presence_posts, "error": self.presence_error},
             "fusion_ms": round(self.loop_ms, 1), "near_m": NEAR_M, "close_m": CLOSE_M,
         }  # fmt: skip
+
+    def thumb_jpg(self, tid):
+        with self.lock:
+            b = self.thumbs.get(tid)
+        if b is not None:
+            return b
+        ph = np.full((72, 72, 3), 230, np.uint8)
+        cv2.putText(ph, f"#{tid}", (12, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 100, 100), 2)
+        return cv2.imencode(".jpg", ph, [cv2.IMWRITE_JPEG_QUALITY, 70])[1].tobytes()
 
     def frame_jpg(self):
         img = None
@@ -474,8 +503,10 @@ function loadTop(){
   next.src = '/top.jpg?' + Date.now();
 }
 function tickTable(){
- fetch('/people?all=1').then(r=>r.json()).then(d=>{const k=['id','distance_m','bearing_deg','speed_mps','radial_mps','facing','facing_state','talking','gesture','pointing_vec','head_yaw_deg','gender','age','source','confirmed','near_s','still_s'];
+ fetch('/people?all=1').then(r=>r.json()).then(d=>{const k=['id','photo','distance_m','bearing_deg','speed_mps','radial_mps','facing','facing_state','talking','gesture','pointing_vec','head_yaw_deg','gender','age','source','confirmed','near_s','still_s'];
+  const ts=Math.floor(Date.now()/1000);
   document.getElementById('tab').innerHTML='<tr>'+k.map(x=>'<th>'+x+'</th>').join('')+'</tr>'+d.people.map(p=>'<tr>'+k.map(x=>{
+    if(x==='photo')return '<td><img src="/thumb/'+p.id+'.jpg?t='+ts+'" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid #ccc"></td>';
     const v=p[x];if(v===null||v===undefined||v==='')return '<td>-</td>';
     if(x==='talking'&&v===true)return '<td style="color:#0a0;font-weight:bold">true</td>';
     if(x==='gesture'&&v==='wave')return '<td style="color:#00c;font-weight:bold">wave</td>';
@@ -490,7 +521,7 @@ function tickTable(){
       return '<td>-</td>';
     }
     return '<td>'+v+'</td>';}).join('')+'</tr>').join('')
-  +'<tr><td colspan=17>proximity: '+JSON.stringify(d.proximity)+'</td></tr>';});}
+  +'<tr><td colspan=18>proximity: '+JSON.stringify(d.proximity)+'</td></tr>';});}
 function poll(){fetch('/events?after='+seq+'&wait=10').then(r=>r.json()).then(d=>{for(const e of d.events){seq=e.seq;
   ev.textContent=new Date(e.time*1000).toLocaleTimeString()+' '+e.type+' '+(e.person?('#'+e.person.id+' '+e.person.distance_m+' m facing='+e.person.facing):JSON.stringify(e.sectors||''))+'\\n'+ev.textContent;}
   poll();}).catch(()=>setTimeout(poll,1000));}
@@ -549,6 +580,9 @@ def serve(vision, port, host):
                     return self._send(200, vision.frame_jpg(), "image/jpeg")
                 if u.path == "/top.jpg":
                     return self._send(200, vision.top_jpg(), "image/jpeg")
+                if u.path.startswith("/thumb/") and u.path.endswith(".jpg"):
+                    tid = int(u.path[len("/thumb/"):-len(".jpg")])
+                    return self._send(200, vision.thumb_jpg(tid), "image/jpeg")
                 if u.path in ("/", "/index.html"):
                     return self._send(200, PAGE.encode(), "text/html; charset=utf-8")
                 return self._send(404, {"error": "not found"})

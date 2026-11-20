@@ -57,7 +57,7 @@ def _limb_from_angles(sh3: np.ndarray, upper_dir: np.ndarray, fore_dir: np.ndarr
 
 
 def simulate_sequence(kind: str, rng: np.random.Generator) -> tuple[np.ndarray, int]:
-    dist_m = rng.uniform(0.9, 4.5)
+    dist_m = rng.uniform(0.45, 4.5)
     yaw_rad = math.radians(rng.uniform(-50.0, 50.0))
     fps = rng.uniform(12.0, 30.0)
     n_frames = int(rng.uniform(7, 15))
@@ -81,12 +81,18 @@ def simulate_sequence(kind: str, rng: np.random.Generator) -> tuple[np.ndarray, 
         az = rng.uniform(math.radians(25), math.radians(95)) * out_sign
         el = rng.uniform(math.radians(-40), math.radians(40))
         dir_p = np.array([math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el)])
-        bend = rng.uniform(0.0, 0.32)
+        bend = rng.uniform(0.0, 0.35)
     elif kind == "point_forward":
-        az = rng.uniform(math.radians(-28), math.radians(28))
+        az = rng.uniform(math.radians(-30), math.radians(30))
         el = rng.uniform(math.radians(-30), math.radians(35))
         dir_p = np.array([math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el)])
-        bend = rng.uniform(0.0, 0.25)
+        bend = rng.uniform(0.0, 0.30)
+    elif kind == "point_casual":
+        # Seated or relaxed pointing: upper arm relaxed/angled down, forearm extended steadily toward target
+        az = rng.uniform(math.radians(-40), math.radians(75)) * out_sign
+        el = rng.uniform(math.radians(-15), math.radians(35))
+        dir_p = np.array([math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el)])
+        ua_casual = np.array([0.35 * out_sign * math.sin(abs(az)), rng.uniform(-0.75, -0.25), rng.uniform(0.30, 0.70)])
     elif kind == "point_transition":
         az = rng.uniform(math.radians(15), math.radians(85)) * out_sign
         el = rng.uniform(math.radians(-25), math.radians(35))
@@ -122,17 +128,21 @@ def simulate_sequence(kind: str, rng: np.random.Generator) -> tuple[np.ndarray, 
             u2 = np.array([-0.25 * out_sign, 0.90, 0.20 + 0.03 * math.sin(4 * t)])
             label = 0
         elif kind == "still_talking":
-            u1 = np.array([0.15 * out_sign, -0.90, 0.20])
+            u1 = np.array([0.12 * out_sign, -0.95, 0.15])
             u2 = np.array([
-                (0.15 + 0.12 * math.sin(2 * math.pi * 1.5 * t + phase0)) * out_sign,
-                -0.15 + 0.12 * math.cos(2 * math.pi * 1.5 * t + phase0),
-                0.75,
+                (-0.10 + 0.18 * math.sin(2 * math.pi * 1.6 * t + phase0)) * out_sign,
+                -0.35 + 0.16 * math.cos(2 * math.pi * 1.6 * t + phase0),
+                0.30,
             ])
             label = 0
         elif kind in ("point_side", "point_forward"):
             jitter_dir = dir_p + np.array([0.04 * math.sin(1.5 * t + phase0), 0.03 * math.cos(1.2 * t + phase0), 0.0])
             u1 = jitter_dir
             u2 = jitter_dir + np.array([0.0, bend * 0.5, 0.0])
+            label = 1
+        elif kind == "point_casual":
+            u1 = ua_casual
+            u2 = dir_p + np.array([0.03 * math.sin(1.2 * t + phase0), 0.02 * math.cos(1.0 * t + phase0), 0.0])
             label = 1
         elif kind == "point_transition":
             alpha = min(1.0, frac * 1.6)
@@ -252,10 +262,10 @@ class PointingDirNet(nn.Module):
 def build_gesture_dataset(n_total: int = 36000, seed: int = 42):
     rng = np.random.default_rng(seed)
     kinds_weights = [
-        ("still_idle", 0.18), ("still_crossed", 0.08), ("still_hip", 0.07),
-        ("still_phone", 0.08), ("still_talking", 0.10),
-        ("point_side", 0.14), ("point_forward", 0.10), ("point_transition", 0.07),
-        ("wave_high", 0.11), ("wave_chest", 0.07),
+        ("still_idle", 0.16), ("still_crossed", 0.08), ("still_hip", 0.07),
+        ("still_phone", 0.08), ("still_talking", 0.09),
+        ("point_side", 0.12), ("point_forward", 0.09), ("point_casual", 0.08), ("point_transition", 0.06),
+        ("wave_high", 0.10), ("wave_chest", 0.07),
     ]
     kinds = [k for k, _ in kinds_weights]
     probs = np.array([w for _, w in kinds_weights])
