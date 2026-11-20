@@ -78,33 +78,35 @@ def simulate_sequence(kind: str, rng: np.random.Generator) -> tuple[np.ndarray, 
     freq = rng.uniform(1.3, 4.5)
 
     if kind == "point_side":
-        az = rng.uniform(math.radians(25), math.radians(95)) * out_sign
-        el = rng.uniform(math.radians(-40), math.radians(40))
+        az = rng.uniform(math.radians(20), math.radians(100)) * out_sign
+        el = rng.uniform(math.radians(-40), math.radians(45))
         dir_p = np.array([math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el)])
-        bend = rng.uniform(0.0, 0.35)
-    elif kind == "point_forward":
-        az = rng.uniform(math.radians(-30), math.radians(30))
-        el = rng.uniform(math.radians(-30), math.radians(35))
+        bend = rng.uniform(0.0, 0.38)
+    elif kind == "point_cross":
+        # Pointing across the body toward the opposite side
+        az = rng.uniform(math.radians(-65), math.radians(-15)) * out_sign
+        el = rng.uniform(math.radians(-25), math.radians(35))
         dir_p = np.array([math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el)])
         bend = rng.uniform(0.0, 0.30)
-    elif kind == "point_casual":
-        # Seated or relaxed pointing: upper arm relaxed/angled down, forearm extended steadily toward target
-        az = rng.uniform(math.radians(-40), math.radians(75)) * out_sign
-        el = rng.uniform(math.radians(-15), math.radians(35))
+    elif kind == "point_forward":
+        az = rng.uniform(math.radians(-28), math.radians(28))
+        el = rng.uniform(math.radians(-25), math.radians(40))
         dir_p = np.array([math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el)])
-        ua_casual = np.array([0.35 * out_sign * math.sin(abs(az)), rng.uniform(-0.75, -0.25), rng.uniform(0.30, 0.70)])
+        bend = rng.uniform(0.0, 0.24)
     elif kind == "point_transition":
-        az = rng.uniform(math.radians(15), math.radians(85)) * out_sign
+        az = rng.uniform(math.radians(-30), math.radians(85)) * out_sign
         el = rng.uniform(math.radians(-25), math.radians(35))
         dir_p = np.array([math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el)])
     elif kind == "wave_high":
-        amp = rng.uniform(0.09, 0.26)
-        base_x = rng.uniform(0.16, 0.42) * out_sign
-        base_y = rng.uniform(0.02, 0.38)
+        amp = rng.uniform(0.08, 0.28)
+        base_x = rng.uniform(0.12, 0.48) * out_sign
+        base_y = rng.uniform(0.0, 0.42)
+        freq = rng.uniform(1.1, 4.8)
     elif kind == "wave_chest":
-        amp = rng.uniform(0.11, 0.28)
-        base_x = rng.uniform(0.12, 0.38) * out_sign
-        base_y = rng.uniform(-0.18, 0.08)
+        amp = rng.uniform(0.09, 0.28)
+        base_x = rng.uniform(0.08, 0.42) * out_sign
+        base_y = rng.uniform(-0.22, 0.12)
+        freq = rng.uniform(1.1, 4.8)
 
     history = []
     for k in range(n_frames):
@@ -135,14 +137,15 @@ def simulate_sequence(kind: str, rng: np.random.Generator) -> tuple[np.ndarray, 
                 0.30,
             ])
             label = 0
-        elif kind in ("point_side", "point_forward"):
+        elif kind == "still_desk":
+            # Hands resting on desk / typing / mouse in front of lower chest/stomach -> MUST be STILL
+            u1 = np.array([rng.uniform(-0.05, 0.20) * out_sign, rng.uniform(-0.95, -0.75), rng.uniform(0.05, 0.30)])
+            u2 = np.array([rng.uniform(-0.35, 0.15) * out_sign, rng.uniform(-0.45, -0.05), rng.uniform(0.45, 0.90)])
+            label = 0
+        elif kind in ("point_side", "point_cross", "point_forward"):
             jitter_dir = dir_p + np.array([0.04 * math.sin(1.5 * t + phase0), 0.03 * math.cos(1.2 * t + phase0), 0.0])
             u1 = jitter_dir
             u2 = jitter_dir + np.array([0.0, bend * 0.5, 0.0])
-            label = 1
-        elif kind == "point_casual":
-            u1 = ua_casual
-            u2 = dir_p + np.array([0.03 * math.sin(1.2 * t + phase0), 0.02 * math.cos(1.0 * t + phase0), 0.0])
             label = 1
         elif kind == "point_transition":
             alpha = min(1.0, frac * 1.6)
@@ -262,10 +265,10 @@ class PointingDirNet(nn.Module):
 def build_gesture_dataset(n_total: int = 36000, seed: int = 42):
     rng = np.random.default_rng(seed)
     kinds_weights = [
-        ("still_idle", 0.16), ("still_crossed", 0.08), ("still_hip", 0.07),
-        ("still_phone", 0.08), ("still_talking", 0.09),
-        ("point_side", 0.12), ("point_forward", 0.09), ("point_casual", 0.08), ("point_transition", 0.06),
-        ("wave_high", 0.10), ("wave_chest", 0.07),
+        ("still_idle", 0.14), ("still_desk", 0.12), ("still_crossed", 0.07), ("still_hip", 0.07),
+        ("still_phone", 0.08), ("still_talking", 0.08),
+        ("point_side", 0.11), ("point_cross", 0.05), ("point_forward", 0.08), ("point_transition", 0.04),
+        ("wave_high", 0.09), ("wave_chest", 0.07),
     ]
     kinds = [k for k, _ in kinds_weights]
     probs = np.array([w for _, w in kinds_weights])

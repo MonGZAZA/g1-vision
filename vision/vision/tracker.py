@@ -392,24 +392,24 @@ class Track:
             if l_ok and len(self.l_arm_hist) >= 2:
                 lf = extract_arm_features(self.l_arm_hist)
                 lp = _GESTURE_CLF.predict_proba(lf)
-                self.l_probs = 0.55 * self.l_probs + 0.45 * lp
+                self.l_probs = 0.40 * self.l_probs + 0.60 * lp
             else:
-                self.l_probs = 0.70 * self.l_probs + 0.30 * np.array([1.0, 0.0, 0.0], dtype=np.float32)
+                self.l_probs = 0.65 * self.l_probs + 0.35 * np.array([1.0, 0.0, 0.0], dtype=np.float32)
 
             if r_ok and len(self.r_arm_hist) >= 2:
                 rf = extract_arm_features(self.r_arm_hist)
                 rp = _GESTURE_CLF.predict_proba(rf)
-                self.r_probs = 0.55 * self.r_probs + 0.45 * rp
+                self.r_probs = 0.40 * self.r_probs + 0.60 * rp
             else:
-                self.r_probs = 0.70 * self.r_probs + 0.30 * np.array([1.0, 0.0, 0.0], dtype=np.float32)
+                self.r_probs = 0.65 * self.r_probs + 0.35 * np.array([1.0, 0.0, 0.0], dtype=np.float32)
 
             p_point_l, p_point_r = float(self.l_probs[1]), float(self.r_probs[1])
             p_wave_l, p_wave_r = float(self.l_probs[2]), float(self.r_probs[2])
             p_point = max(p_point_l, p_point_r)
             p_wave = max(p_wave_l, p_wave_r)
 
-            enter_th = 0.55
-            exit_th = 0.38
+            enter_th = 0.68
+            exit_th = 0.45
             l_point = l_ok and (p_point_l >= (exit_th if self.gesture == "point" and self.pointing_arm == "left" else enter_th))
             r_point = r_ok and (p_point_r >= (exit_th if self.gesture == "point" and self.pointing_arm == "right" else enter_th))
             point_active = l_point or r_point

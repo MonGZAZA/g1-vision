@@ -403,8 +403,6 @@ class Vision:
                 g_val = p.get("gesture")
                 g_col = (0, 165, 255) if g_val == "point" else (255, 100, 0)
                 g_txt = g_val.upper()
-                if g_val == "point" and p.get("pointing_arm"):
-                    g_txt += f" ({p['pointing_arm'].upper()})"
                 cv2.putText(img, g_txt, (x0, min(img.shape[0] - 6, y_extra)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 3)
                 cv2.putText(img, g_txt, (x0, min(img.shape[0] - 6, y_extra)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, g_col, 2)
             if p and p.get("gesture") == "point" and p.get("pointing_ray_2d"):
@@ -510,7 +508,7 @@ function tickTable(){
     const v=p[x];if(v===null||v===undefined||v==='')return '<td>-</td>';
     if(x==='talking'&&v===true)return '<td style="color:#0a0;font-weight:bold">true</td>';
     if(x==='gesture'&&v==='wave')return '<td style="color:#00c;font-weight:bold">wave</td>';
-    if(x==='gesture'&&v==='point')return '<td style="color:#d50;font-weight:bold">point ('+(p.pointing_arm||'').toUpperCase()+')</td>';
+    if(x==='gesture'&&v==='point')return '<td style="color:#d50;font-weight:bold">point</td>';
     if(x==='pointing_vec'){
       if(p.gesture==='point'&&p.pointing_vector){
         const pv=p.pointing_vector;
